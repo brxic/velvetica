@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react'
 import maplibregl, { type GeoJSONSource, type Map as MapLibreMap, type MapMouseEvent, type Marker } from 'maplibre-gl'
 import type { Coordinate, Locale, PlannedRoute, Waypoint } from '@/lib/domain'
 import { SWITZERLAND } from '@/lib/domain'
+import { analysisSegments, analyzeRoute } from '@/lib/route-analysis'
 
 type Props = {
   activeRoute: PlannedRoute | null
@@ -13,12 +14,13 @@ type Props = {
   onWaypointMove: (id: string, longitude: number, latitude: number) => void
   onRouteShape: (longitude: number, latitude: number, insertionIndex: number) => void
   activeProfileIndex: number | null
+  onActiveProfileIndexChange: (index: number | null) => void
   locale: Locale
 }
 
 const emptyCollection = (): GeoJSON.FeatureCollection => ({ type: 'FeatureCollection', features: [] })
 
-export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onWaypointMove, onRouteShape, activeProfileIndex, locale }: Props) {
+export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onWaypointMove, onRouteShape, activeProfileIndex, onActiveProfileIndexChange, locale }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
   const markersRef = useRef<Marker[]>([])
@@ -27,12 +29,14 @@ export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onW
   const shapeHandlerRef = useRef(onRouteShape)
   const activeRouteRef = useRef(activeRoute)
   const waypointsRef = useRef(waypoints)
+  const profileHandlerRef = useRef(onActiveProfileIndexChange)
 
   useEffect(() => { clickHandlerRef.current = onMapClick }, [onMapClick])
   useEffect(() => { moveHandlerRef.current = onWaypointMove }, [onWaypointMove])
   useEffect(() => { shapeHandlerRef.current = onRouteShape }, [onRouteShape])
   useEffect(() => { activeRouteRef.current = activeRoute }, [activeRoute])
   useEffect(() => { waypointsRef.current = waypoints }, [waypoints])
+  useEffect(() => { profileHandlerRef.current = onActiveProfileIndexChange }, [onActiveProfileIndexChange])
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return
@@ -94,11 +98,19 @@ export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onW
       map.addLayer({ id: 'saved-routes-line', type: 'line', source: 'saved-routes', paint: { 'line-color': '#676a70', 'line-width': 3, 'line-opacity': .42, 'line-dasharray': [2, 2] } })
       map.addSource('active-route', { type: 'geojson', data: emptyCollection() })
       map.addLayer({ id: 'active-route-casing', type: 'line', source: 'active-route', paint: { 'line-color': '#ffffff', 'line-width': 9, 'line-opacity': .88 } })
-      map.addLayer({ id: 'active-route-line', type: 'line', source: 'active-route', paint: { 'line-color': '#e00112', 'line-width': 5, 'line-opacity': 1 } })
+      map.addLayer({ id: 'active-route-line', type: 'line', source: 'active-route', paint: { 'line-color': ['interpolate', ['linear'], ['get', 'grade'], 2, '#22a559', 4, '#82b927', 6, '#d7b814', 9, '#f28c18', 12, '#e94b22', 16, '#c91524'], 'line-width': 5, 'line-opacity': 1 } })
       map.addSource('profile-position', { type: 'geojson', data: emptyCollection() })
       map.addLayer({ id: 'profile-position-dot', type: 'circle', source: 'profile-position', paint: { 'circle-radius': 7, 'circle-color': '#e00112', 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 3 } })
       map.on('mouseenter', 'active-route-line', () => { map.getCanvas().style.cursor = 'grab' })
-      map.on('mouseleave', 'active-route-line', () => { if (!dragMarker) map.getCanvas().style.cursor = '' })
+      map.on('mousemove', 'active-route-line', (event) => {
+        const coordinateIndex = event.features?.[0]?.properties?.index
+        const route = activeRouteRef.current
+        if (typeof coordinateIndex === 'number' && route) {
+          const profileLength = route.metrics.elevationProfile.length
+          profileHandlerRef.current(Math.round(coordinateIndex / Math.max(1, route.geometry.coordinates.length - 1) * Math.max(0, profileLength - 1)))
+        }
+      })
+      map.on('mouseleave', 'active-route-line', () => { if (!dragMarker) map.getCanvas().style.cursor = ''; profileHandlerRef.current(null) })
       map.on('mousedown', 'active-route-line', beginRouteDrag)
       map.on('click', 'active-route-line', (event) => {
         if (suppressNextClick) return
@@ -122,7 +134,10 @@ export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onW
     if (!map) return
     const update = () => {
       const activeSource = map.getSource('active-route') as GeoJSONSource | undefined
-      activeSource?.setData(activeRoute ? { type: 'Feature', properties: {}, geometry: activeRoute.geometry } : emptyCollection())
+      if (activeRoute) {
+        const analysis = analyzeRoute(activeRoute)
+        activeSource?.setData(analysis.samples.length ? analysisSegments(analysis) : { type: 'Feature', properties: { grade: 0, index: 0 }, geometry: activeRoute.geometry })
+      } else activeSource?.setData(emptyCollection())
       const savedSource = map.getSource('saved-routes') as GeoJSONSource | undefined
       savedSource?.setData({ type: 'FeatureCollection', features: savedRoutes.filter((route) => route.id !== activeRoute?.id).map((route) => ({ type: 'Feature', properties: { id: route.id }, geometry: route.geometry })) })
       if (activeRoute) {

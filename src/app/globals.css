@@ -116,7 +116,7 @@ button { color: inherit; }
 .metric-grid strong { font-size: 12px; white-space: nowrap; }
 .preview-note { margin: 10px 0; color: var(--muted); font-size: 10px; }
 .route-detail-grid { margin-top: 9px; display: grid; grid-template-columns: 1.35fr 1fr; gap: 8px; }
-.elevation-card, .surface-card, .profile-empty { min-height: 73px; padding: 9px 11px; border-radius: 11px; background: #f5f5f3; }
+.elevation-card, .surface-card, .profile-empty { min-height: 88px; padding: 9px 11px; border-radius: 11px; background: #f5f5f3; }
 .elevation-head, .surface-card > div:first-child { display: flex; justify-content: space-between; align-items: center; font-size: 9px; }
 .elevation-head small, .surface-card small { color: var(--muted); font-size: 8px; }
 .elevation-card svg { width: 100%; height: 42px; display: block; }
@@ -124,6 +124,15 @@ button { color: inherit; }
 .elevation-card svg[role="slider"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 .elevation-cursor-line { stroke: var(--text); stroke-width: 1; stroke-dasharray: 2 2; opacity: .55; pointer-events: none; }
 .elevation-cursor-dot { fill: var(--accent); stroke: #fff; stroke-width: 1.4; pointer-events: none; }
+.grade-legend { min-height: 14px; display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 7px; }
+.grade-legend span { display: inline-flex; align-items: center; gap: 3px; }
+.grade-legend i { width: 12px; height: 3px; border-radius: 4px; background: #22a559; }
+.grade-legend .grade-medium { background: #d7b814; }
+.grade-legend .grade-hard { background: #e94b22; }
+.climb-list { margin-top: 5px; display: flex; gap: 5px; overflow-x: auto; scrollbar-width: thin; }
+.climb-list button { min-width: max-content; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; display: flex; align-items: center; gap: 5px; background: var(--card); color: var(--muted); font-size: 7px; cursor: pointer; }
+.climb-list button:hover, .climb-list button:focus-visible { border-color: #f28c18; outline: none; }
+.climb-list b { color: var(--ink); }
 .surface-card strong { font-size: 10px; }
 .surface-track { height: 6px; margin: 11px 0 6px; border-radius: 999px; overflow: hidden; background: #dededb; }
 .surface-track i { display: block; height: 100%; border-radius: inherit; background: var(--red); }

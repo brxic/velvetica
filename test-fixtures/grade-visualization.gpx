@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Velvetia QA" xmlns="http://www.topografix.com/GPX/1/1">
+  <metadata><name>Steigungsfarben Test</name></metadata>
+  <trk><trkseg>
+    <trkpt lat="46.9400" lon="7.4300"><ele>500</ele></trkpt>
+    <trkpt lat="46.9420" lon="7.4320"><ele>503</ele></trkpt>
+    <trkpt lat="46.9440" lon="7.4340"><ele>512</ele></trkpt>
+    <trkpt lat="46.9460" lon="7.4360"><ele>535</ele></trkpt>
+    <trkpt lat="46.9480" lon="7.4380"><ele>575</ele></trkpt>
+    <trkpt lat="46.9500" lon="7.4400"><ele>580</ele></trkpt>
+  </trkseg></trk>
+</gpx>
