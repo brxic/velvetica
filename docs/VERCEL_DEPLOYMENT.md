@@ -1,6 +1,8 @@
 # Vercel-Testdeployment
 
-Velvetia kann ohne zusätzliche Infrastruktur als öffentliches Testdeployment auf Vercel laufen. Dabei verwendet die Anwendung bewusst den eingebauten Preview-Router. Karte, Ortssuche, Editor, lokale Routenverwaltung, GPX-Export, Sprachen und Themes funktionieren; die Routengeometrie ist in diesem Modus eine Vorschau und kein strassengenaues OSM-Routing.
+Velvetia kann ohne zusätzliche Infrastruktur als öffentliches Testdeployment auf Vercel laufen. Die Anwendung verwendet dafür den öffentlichen FOSSGIS-OSM-Fahrradrouter und das Höhenprofil des Schweizer Geoportals. Die Geometrie folgt damit dem realen Wegenetz; der synthetische Preview-Router wird im Vercel-Deployment nicht verwendet.
+
+Der öffentliche Router ist ein fair-use Testdienst: maximal eine Anfrage pro Sekunde, kein Scraping und keine starke Nutzung. Velvetia drosselt seine Anfragen innerhalb einer Serverinstanz. Für einen grösseren öffentlichen Betrieb bleibt eine eigene Valhalla-Instanz erforderlich.
 
 ## Deployment über GitHub
 
@@ -21,9 +23,9 @@ Folgende Seiten beziehungsweise Abläufe prüfen:
 
 - `/` lädt Karte und Velvetia-Oberfläche.
 - `/api/health` antwortet mit HTTP 200 und `status: "healthy"`.
-- Im Health-Ergebnis stehen Routing, Datenbank und Cache ohne externe Konfiguration auf `disabled`.
+- Im Health-Ergebnis steht Routing auf `up`; Datenbank und Cache bleiben ohne externe Konfiguration `disabled`.
 - Ein Startpunkt kann gesucht oder auf der Karte gesetzt werden.
-- Eine Preview-Route kann geplant, verändert, gespeichert und als GPX exportiert werden.
+- Eine strassengenaue OSM-Fahrradroute kann geplant, verändert, gespeichert und als GPX exportiert werden.
 - Das Favicon erscheint im Browser-Tab.
 
 ## Später echtes Routing aktivieren
@@ -33,10 +35,10 @@ Sobald eine öffentlich und geschützt erreichbare Valhalla-Instanz existiert, i
 ```dotenv
 ROUTING_PROVIDER=valhalla
 VALHALLA_URL=https://routing.example.ch
-ROUTING_FALLBACK=preview
+ROUTING_FALLBACK=none
 ```
 
-Danach neu deployen. `VALHALLA_URL` ist serverseitig und wird nicht an den Browser ausgeliefert. Die Routinginstanz sollte HTTPS, Zugriffsschutz, Rate Limits und Monitoring besitzen.
+Danach neu deployen. `VALHALLA_URL` ist serverseitig und wird nicht an den Browser ausgeliefert. Die Routinginstanz sollte HTTPS, Zugriffsschutz, Rate Limits und Monitoring besitzen. Als temporärer Vercel-Standard gelten ohne zusätzliche Variablen bereits `ROUTING_PROVIDER=fossgis` und `ROUTING_FALLBACK=none` aus `.env.production`.
 
 Für das Testdeployment nicht die lokalen Adressen `localhost:8002`, `localhost:5432` oder `localhost:6379` eintragen: Auf Vercel bezeichnet `localhost` immer die jeweilige isolierte Function und nicht den Entwicklungsrechner.
 

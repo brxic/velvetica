@@ -242,7 +242,7 @@ button { color: inherit; }
 @media (max-width: 520px) {
   .planner-panel { padding: 22px; }
   .topbar-actions .icon-button { min-width: 36px; height: 36px; }
-  .route-summary { max-height: 48vh; overflow-y: auto; }
+  .route-summary { max-height: min(62vh, calc(100dvh - 96px)); padding-bottom: 76px; overflow-y: auto; overscroll-behavior: contain; }
   .route-summary-head { align-items: flex-start; gap: 8px; }
   .route-summary-head > div:first-child { min-width: 0; flex: 1; }
   .route-name-input, .route-description-input { width: 100%; }
@@ -252,6 +252,8 @@ button { color: inherit; }
   .route-actions { margin-top: 10px; flex-wrap: wrap; }
   .route-actions .text-button { flex: 1; padding: 0 7px; }
   .route-detail-grid { grid-template-columns: 1fr; }
+  .mobile-panel-toggle { top: 82px; bottom: auto; left: 14px; z-index: 26; }
+  .mobile-panel-toggle.is-panel-open { top: auto; bottom: 20px; left: 20px; }
   .onboarding { padding: 30px 22px 22px; }
 }
 

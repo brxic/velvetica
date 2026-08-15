@@ -96,6 +96,6 @@ Die vollständige lokale Routing- und Datenumgebung ist in [docs/LOCAL_INFRASTRU
 
 ## Testdeployment auf Vercel
 
-Das Repository ist für einen Vercel-Import über GitHub vorbereitet. Ohne zusätzliche Environment Variables startet es sicher mit dem eingebauten Preview-Router; lokale Docker-Dienste werden nicht vorausgesetzt oder hochgeladen.
+Das Repository ist für einen Vercel-Import über GitHub vorbereitet. Ohne zusätzliche Environment Variables verwendet es den fair-use FOSSGIS-OSM-Fahrradrouter und die offizielle swisstopo-Höhenprofil-API; lokale Docker-Dienste werden nicht vorausgesetzt oder hochgeladen. Für grössere Nutzung wird Valhalla separat gehostet.
 
 Die vollständige Anleitung und die spätere Umschaltung auf eine externe Valhalla-Instanz stehen in [docs/VERCEL_DEPLOYMENT.md](./docs/VERCEL_DEPLOYMENT.md).

@@ -32,6 +32,10 @@ export function summarizeHealth(checks: HealthChecks) {
 export async function checkRouting(): Promise<HealthCheck> {
   const startedAt = performance.now()
 
+  if (process.env.ROUTING_PROVIDER === 'fossgis') {
+    return { status: 'up', latencyMs: elapsed(startedAt), version: 'FOSSGIS public OSM bike' }
+  }
+
   if (process.env.ROUTING_PROVIDER !== 'valhalla') {
     return { status: 'disabled', latencyMs: elapsed(startedAt) }
   }

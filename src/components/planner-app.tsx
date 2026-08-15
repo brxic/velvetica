@@ -149,6 +149,7 @@ export function PlannerApp() {
   const persistedRoute = route ? savedRoutes.find((saved) => saved.id === route.id) : undefined
   const hasUnsavedChanges = Boolean(route && (!persistedRoute || routeSignature(route) !== routeSignature(persistedRoute)))
   const isGpxImport = route?.provenance.routingEngine === 'GPX Import'
+  const hasSurfaceAnalysis = !isGpxImport && route?.provenance.routingEngine !== 'FOSSGIS OSRM Bike'
 
   function toggleTheme() { const next = theme === 'light' ? 'dark' : 'light'; setTheme(next); localStorage.setItem(THEME_KEY, next) }
   async function importGpx(file: File) {
@@ -202,7 +203,7 @@ export function PlannerApp() {
       </div>
     </header>
 
-    <button className="mobile-panel-toggle" onClick={() => setMobilePanel(!mobilePanel)} aria-label={locale === 'de' ? 'Planungsmenü öffnen' : 'Open planning menu'}>{mobilePanel ? <X /> : <Menu />}</button>
+    <button className={`mobile-panel-toggle ${mobilePanel ? 'is-panel-open' : ''}`} onClick={() => setMobilePanel(!mobilePanel)} aria-label={mobilePanel ? (locale === 'de' ? 'Planungsmenü schliessen' : 'Close planning menu') : (locale === 'de' ? 'Planungsmenü öffnen' : 'Open planning menu')}>{mobilePanel ? <X /> : <Menu />}</button>
 
     <aside className={`planner-panel ${mobilePanel ? 'is-open' : ''}`} aria-label={locale === 'de' ? 'Routeneinstellungen' : 'Route settings'}>
       <div className="panel-intro"><p className="eyebrow">{locale === 'de' ? 'Schweizer Routenplaner' : 'Swiss route planner'}</p><h1>{locale === 'de' ? 'Wohin möchtest du fahren?' : 'Where do you want to ride?'}</h1><p>{locale === 'de' ? 'Suche einen Ort oder setze Punkte direkt auf der Karte. Den Rest übernimmt Velvetia.' : 'Search for a place or choose points on the map. Velvetia takes care of the rest.'}</p></div>
@@ -261,15 +262,15 @@ export function PlannerApp() {
         <div><RouteIcon /><span>{copy.distanceLabel}</span><strong>{route.metrics.distanceKm} km</strong></div>
         <div><Clock3 /><span>{copy.time}</span><strong>{formatDuration(route.metrics.durationMinutes)}</strong></div>
         <div><Mountain /><span>{copy.elevation}</span><strong>{route.metrics.elevationGainM} m</strong></div>
-        <div><Bike /><span>{copy.surface}</span><strong>{isGpxImport ? '—' : `${route.metrics.asphaltPercent} %`}</strong></div>
+        <div><Bike /><span>{copy.surface}</span><strong>{hasSurfaceAnalysis ? `${route.metrics.asphaltPercent} %` : '—'}</strong></div>
       </div>
       <div className="route-detail-grid">
         <ElevationProfile route={route} locale={locale} activeIndex={activeProfileIndex} onActiveIndexChange={setActiveProfileIndex} />
-        <div className="surface-card">{isGpxImport ? <div><span>{locale === 'de' ? 'Untergrund' : 'Surface'}</span><strong>{locale === 'de' ? 'Nicht analysiert' : 'Not analysed'}</strong></div> : <><div><span>{locale === 'de' ? 'Untergrund' : 'Surface'}</span><strong>{route.metrics.asphaltPercent}% {locale === 'de' ? 'Asphalt' : 'paved'}</strong></div><div className="surface-track"><i style={{ width: `${route.metrics.asphaltPercent}%` }} /></div><small>{route.metrics.cyclewayPercent}% {locale === 'de' ? 'geschätzter Radweganteil' : 'estimated cycleway share'}</small></>}</div>
+        <div className="surface-card">{!hasSurfaceAnalysis ? <div><span>{locale === 'de' ? 'Untergrund' : 'Surface'}</span><strong>{locale === 'de' ? 'Nicht analysiert' : 'Not analysed'}</strong></div> : <><div><span>{locale === 'de' ? 'Untergrund' : 'Surface'}</span><strong>{route.metrics.asphaltPercent}% {locale === 'de' ? 'Asphalt' : 'paved'}</strong></div><div className="surface-track"><i style={{ width: `${route.metrics.asphaltPercent}%` }} /></div><small>{route.metrics.cyclewayPercent}% {locale === 'de' ? 'geschätzter Radweganteil' : 'estimated cycleway share'}</small></>}</div>
       </div>
       {route.warnings.length > 0 && <ul className="warning-list">{route.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
       <RouteProvenance provenance={route.provenance} locale={locale} />
-      <p className="preview-note">{isGpxImport ? (locale === 'de' ? 'Die Geometrie entspricht unverändert der importierten Datei.' : 'The geometry is unchanged from the imported file.') : route.metrics.confidence === 'verified' ? (locale === 'de' ? 'Straßengenau berechnet mit dem lokalen Schweizer Valhalla-Routinggraphen.' : 'Road-accurate route calculated with the local Swiss Valhalla routing graph.') : copy.previewInfo}</p>
+      <p className="preview-note">{isGpxImport ? (locale === 'de' ? 'Die Geometrie entspricht unverändert der importierten Datei.' : 'The geometry is unchanged from the imported file.') : route.provenance.routingEngine === 'FOSSGIS OSRM Bike' ? (locale === 'de' ? 'Straßengenau über den öffentlichen FOSSGIS-OSM-Fahrradrouter berechnet.' : 'Road-accurate route calculated with the public FOSSGIS OSM bicycle router.') : route.metrics.confidence === 'verified' ? (locale === 'de' ? 'Straßengenau berechnet mit dem lokalen Schweizer Valhalla-Routinggraphen.' : 'Road-accurate route calculated with the local Swiss Valhalla routing graph.') : copy.previewInfo}</p>
       </div>}
       <div className="route-actions"><button className="secondary-button" onClick={() => saveRoute(false)}><Save size={17} />{persistedRoute ? (locale === 'de' ? 'Änderungen speichern' : 'Save changes') : copy.save}</button>{persistedRoute && <button className="text-button" onClick={() => saveRoute(true)}><Copy size={16} />{locale === 'de' ? 'Als Kopie' : 'Save copy'}</button>}<button className="primary-button" onClick={() => downloadGpx(route)}><Download size={17} />{copy.export}</button><button className="icon-button" onClick={reset} aria-label={copy.clear}><RotateCcw size={18} /></button></div>
     </section>}

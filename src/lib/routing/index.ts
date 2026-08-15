@@ -2,11 +2,13 @@ import type { PlanningRequest } from '@/lib/domain'
 import { planPreviewRoute } from '@/lib/preview-router'
 import type { RoutingProvider } from './provider'
 import { ValhallaProvider } from './valhalla'
+import { FossgisBikeProvider } from './fossgis'
 
 const previewProvider: RoutingProvider = { id: 'preview', async plan(request) { return planPreviewRoute(request) } }
 
 export function getRoutingProvider(): RoutingProvider {
   if (process.env.ROUTING_PROVIDER === 'valhalla' && process.env.VALHALLA_URL) return new ValhallaProvider(process.env.VALHALLA_URL)
+  if (process.env.ROUTING_PROVIDER === 'fossgis') return new FossgisBikeProvider(process.env.FOSSGIS_URL)
   return previewProvider
 }
 
