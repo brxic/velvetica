@@ -22,6 +22,7 @@ Velvetia ist eine moderne, leicht verständliche Webanwendung zur Planung indivi
 - Editorverlauf mit 20 Schritten Undo/Redo
 - lokale Routenverwaltung mit Namen, Suche, Favoriten, Duplikaten und Löschen
 - GPX 1.1 mit Wegpunkten und Höhenwerten
+- persistenter Light/Dark-Modus mit allen vier unveränderten Velvetia-Logoassets
 
 Der ausführliche Architektur-, Daten- und Phasenplan steht in [VELVETIA_UMSETZUNGSPLAN.md](./VELVETIA_UMSETZUNGSPLAN.md).
 

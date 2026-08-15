@@ -1,9 +1,12 @@
 'use client'
 
 import Image from 'next/image'
-import { Bike, Bookmark, Check, ChevronDown, CircleHelp, Clock3, Copy, Download, Languages, MapPin, Menu, Mountain, Navigation, Redo2, RotateCcw, Route as RouteIcon, Save, Search, Sparkles, Star, Trash2, Undo2, X } from 'lucide-react'
+import { Bike, Bookmark, Check, ChevronDown, CircleHelp, Clock3, Copy, Download, Languages, MapPin, Menu, Moon, Mountain, Navigation, Redo2, RotateCcw, Route as RouteIcon, Save, Search, Sparkles, Star, Sun, Trash2, Undo2, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useReducer, useState } from 'react'
 import logoLight from '../../velvetia-full-light.png'
+import logoDark from '../../velvetia-full-dark.png'
+import markLight from '../../velvetia-light.png'
+import markDark from '../../velvetia-dark.png'
 import type { BikeProfile, Locale, PlannedRoute, RouteMode, RoutePreferences, Waypoint } from '@/lib/domain'
 import { downloadGpx } from '@/lib/gpx'
 import { t } from '@/lib/i18n'
@@ -16,6 +19,7 @@ import { RouteProvenance } from './route-provenance'
 
 const STORAGE_KEY = 'velvetia.saved-routes.v1'
 const GUIDE_KEY = 'velvetia.guide-seen.v1'
+const THEME_KEY = 'velvetia.theme.v1'
 
 const profiles: Array<{ id: BikeProfile; icon: typeof Bike }> = [
   { id: 'road', icon: Bike }, { id: 'gravel', icon: RouteIcon }, { id: 'touring', icon: Navigation }, { id: 'city', icon: MapPin },
@@ -25,6 +29,7 @@ function formatDuration(minutes: number) { const h = Math.floor(minutes / 60); c
 
 export function PlannerApp() {
   const [locale, setLocale] = useState<Locale>('de'); const copy = t(locale)
+  const [theme, setTheme] = useState<'light' | 'dark'>('light')
   const [mode, setMode] = useState<RouteMode>('round-trip'); const [profile, setProfile] = useState<BikeProfile>('road')
   const [distance, setDistance] = useState(60); const [waypointHistory, dispatchWaypoints] = useReducer(waypointHistoryReducer, initialWaypointHistory)
   const waypoints = waypointHistory.present
@@ -37,7 +42,7 @@ export function PlannerApp() {
 
   useEffect(() => {
     const hydration = window.setTimeout(() => {
-      try { setSavedRoutes(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]')); setShowGuide(!localStorage.getItem(GUIDE_KEY)) } catch { setSavedRoutes([]) }
+      try { setSavedRoutes(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]')); setShowGuide(!localStorage.getItem(GUIDE_KEY)); setTheme(localStorage.getItem(THEME_KEY) === 'dark' ? 'dark' : 'light') } catch { setSavedRoutes([]) }
     }, 0)
     return () => window.clearTimeout(hydration)
   }, [])
@@ -99,17 +104,23 @@ export function PlannerApp() {
     .filter((saved) => saved.name.toLocaleLowerCase(locale).includes(savedSearch.trim().toLocaleLowerCase(locale)))
     .sort((a, b) => Number(Boolean(b.favorite)) - Number(Boolean(a.favorite)))
 
-  return <main className="app-shell">
+  function toggleTheme() { const next = theme === 'light' ? 'dark' : 'light'; setTheme(next); localStorage.setItem(THEME_KEY, next) }
+
+  return <main className={`app-shell theme-${theme}`}>
     <MapCanvas activeRoute={route} savedRoutes={savedRoutes} waypoints={waypoints} onMapClick={handleMapClick} onWaypointMove={handleWaypointMove} />
 
     <header className="topbar">
-      <button className="brand" onClick={reset} aria-label="Velvetia Startseite"><Image src={logoLight} alt="Velvetia" priority /></button>
+      <button className="brand" onClick={reset} aria-label="Velvetia Startseite">
+        <Image className="brand-full" src={theme === 'light' ? logoLight : logoDark} alt="Velvetia" priority />
+        <Image className="brand-mark" src={theme === 'light' ? markLight : markDark} alt="" priority />
+      </button>
       <nav aria-label="Hauptnavigation">
         <button className="nav-button is-active"><RouteIcon size={18} /> {copy.planner}</button>
         <button className="nav-button" onClick={() => setShowSaved(true)}><Bookmark size={18} /> {copy.saved}<span className="count">{savedRoutes.length}</span></button>
       </nav>
       <div className="topbar-actions">
         <button className="icon-button labelled" onClick={() => setShowGuide(true)}><CircleHelp size={19} /><span>{copy.guide}</span></button>
+        <button className="icon-button" onClick={toggleTheme} aria-label={theme === 'light' ? (locale === 'de' ? 'Dunkles Design' : 'Dark theme') : (locale === 'de' ? 'Helles Design' : 'Light theme')}>{theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}</button>
         <button className="icon-button" onClick={() => setLocale(locale === 'de' ? 'en' : 'de')} aria-label="Sprache wechseln"><Languages size={19} /><b>{locale.toUpperCase()}</b></button>
       </div>
     </header>
