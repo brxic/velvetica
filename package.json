@@ -17,14 +17,17 @@
     "lucide-react": "^0.468.0",
     "maplibre-gl": "^5.12.0",
     "next": "^16.1.0",
+    "pg": "^8.23.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "redis": "^6.2.1",
     "zod": "^4.1.0"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.6.0",
     "@testing-library/react": "^16.1.0",
     "@types/node": "^24.0.0",
+    "@types/pg": "^8.21.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "eslint": "^9.18.0",
@@ -34,4 +37,3 @@
     "vitest": "^3.0.0"
   }
 }
-
