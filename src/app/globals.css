@@ -111,6 +111,15 @@ button { color: inherit; }
 .surface-track { height: 6px; margin: 11px 0 6px; border-radius: 999px; overflow: hidden; background: #dededb; }
 .surface-track i { display: block; height: 100%; border-radius: inherit; background: var(--red); }
 .warning-list { margin: 8px 0 0; padding: 7px 10px 7px 26px; border-radius: 9px; background: #fff7e8; color: #765100; font-size: 9px; }
+.provenance-card { margin-top: 8px; padding: 8px 10px; border: 1px solid #e4e4e2; border-radius: 10px; display: grid; grid-template-columns: 1.4fr 1fr .7fr; gap: 10px; background: #fafaf8; }
+.provenance-card > div { min-width: 0; display: grid; grid-template-columns: 18px 1fr; gap: 1px 5px; align-items: center; }
+.provenance-card svg { grid-row: span 2; color: var(--red); }
+.provenance-card span { color: var(--muted); font-size: 8px; }
+.provenance-card strong { overflow: hidden; color: var(--ink); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.provenance-card .confidence-high { color: #14733c; }
+.provenance-card .confidence-medium { color: #8a5b00; }
+.provenance-card .confidence-low { color: var(--red); }
+.provenance-legacy { margin-top: 8px; padding: 8px 10px; border-radius: 9px; background: #f3f3f1; color: var(--muted); font-size: 8px; }
 .profile-empty { display: grid; place-items: center; color: var(--muted); font-size: 9px; text-align: center; }
 .route-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .route-actions button { min-height: 40px; font-size: 11px; }

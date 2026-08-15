@@ -8,6 +8,7 @@ describe('GPX export', () => {
       id: 'r1', name: 'Basel & Rhein', createdAt: '2026-08-15T12:00:00.000Z', profile: 'road', mode: 'one-way',
       geometry: { type: 'LineString', coordinates: [[7.5, 47.5], [7.6, 47.6]] }, waypoints: [{ id: 'start', coordinate: [7.5, 47.5], label: 'Start & Ziel', kind: 'start' }], warnings: [],
       metrics: { distanceKm: 12, durationMinutes: 30, elevationGainM: 120, elevationLossM: 80, asphaltPercent: 95, cyclewayPercent: 30, confidence: 'preview', elevationProfile: [400, 420] },
+      provenance: { routingEngine: 'test', primaryDataSource: 'test', graphVersion: 'test', dataUpdatedAt: '2026-08-15T12:00:00.000Z', analyzedAt: '2026-08-15T12:00:00.000Z', regionId: 'ch', confidence: 'low' },
     }
     const xml = routeToGpx(route)
     expect(xml).toContain('<gpx version="1.1"')

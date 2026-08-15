@@ -47,10 +47,11 @@ export function planPreviewRoute(request: PlanningRequest): PlannedRoute {
   const elevationGainM = Math.round(distanceKm * (request.profile === 'road' ? 8.2 : request.profile === 'gravel' ? 10.4 : 6.3) * climbingFactor)
   const surfaceAdjustment = request.preferences.surface === 'mostly-paved' ? 4 : request.preferences.surface === 'unpaved-friendly' ? -20 : 0
   const elevationProfile = Array.from({ length: 48 }, (_, index) => Math.round(410 + Math.sin(index / 4.2) * 65 * climbingFactor + Math.sin(index / 1.9) * 18 + index * (request.mode === 'round-trip' ? 0 : 1.4)))
+  const createdAt = new Date().toISOString()
 
   return {
     id: crypto.randomUUID(), name: `Velvetia ${request.mode === 'round-trip' ? 'Rundtour' : 'Route'}`,
-    createdAt: new Date().toISOString(), profile: request.profile, mode: request.mode,
+    createdAt, profile: request.profile, mode: request.mode,
     geometry: { type: 'LineString', coordinates }, waypoints: request.waypoints,
     metrics: {
       distanceKm: Math.round(distanceKm * 10) / 10,
@@ -59,5 +60,6 @@ export function planPreviewRoute(request: PlanningRequest): PlannedRoute {
       asphaltPercent: Math.max(25, Math.min(100, asphalt[request.profile] + surfaceAdjustment)), cyclewayPercent: request.profile === 'city' ? 58 : 34, confidence: 'preview', elevationProfile,
     },
     warnings: ['Preview-Geometrie folgt noch nicht dem realen Wegenetz.'],
+    provenance: { routingEngine: 'Velvetia Preview', primaryDataSource: 'Synthetische Vorschaugeometrie', graphVersion: 'preview-v1', dataUpdatedAt: createdAt, analyzedAt: createdAt, regionId: 'ch', confidence: 'low' },
   }
 }

@@ -12,6 +12,7 @@ import { Onboarding } from './onboarding'
 import { ElevationProfile } from './elevation-profile'
 import { PlaceSearch } from './place-search'
 import { initialWaypointHistory, waypointHistoryReducer } from '@/lib/waypoint-history'
+import { RouteProvenance } from './route-provenance'
 
 const STORAGE_KEY = 'velvetia.saved-routes.v1'
 const GUIDE_KEY = 'velvetia.guide-seen.v1'
@@ -178,6 +179,7 @@ export function PlannerApp() {
         <div className="surface-card"><div><span>Untergrund</span><strong>{route.metrics.asphaltPercent}% Asphalt</strong></div><div className="surface-track"><i style={{ width: `${route.metrics.asphaltPercent}%` }} /></div><small>{route.metrics.cyclewayPercent}% geschätzter Radweganteil</small></div>
       </div>
       {route.warnings.length > 0 && <ul className="warning-list">{route.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
+      <RouteProvenance provenance={route.provenance} locale={locale} />
       <p className="preview-note">{route.metrics.confidence === 'verified' ? (locale === 'de' ? 'Straßengenau berechnet mit dem lokalen Schweizer Valhalla-Routinggraphen.' : 'Road-accurate route calculated with the local Swiss Valhalla routing graph.') : copy.previewInfo}</p>
       <div className="route-actions"><button className="secondary-button" onClick={saveRoute}><Save size={17} />{copy.save}</button><button className="primary-button" onClick={() => downloadGpx(route)}><Download size={17} />{copy.export}</button><button className="icon-button" onClick={reset} aria-label={copy.clear}><RotateCcw size={18} /></button></div>
     </section>}

@@ -75,6 +75,18 @@ async function fetchRouteAttributes(baseUrl: string, coordinates: Coordinate[]) 
   } catch { return { asphaltPercent: 0, cyclewayPercent: 0, analyzed: false } }
 }
 
+async function fetchGraphMetadata(baseUrl: string) {
+  try {
+    const response = await fetch(`${baseUrl.replace(/\/$/, '')}/status`, { signal: AbortSignal.timeout(3_000) })
+    if (!response.ok) throw new Error('VALHALLA_STATUS_FAILED')
+    const status = await response.json() as { version?: string; tileset_last_modified?: number }
+    return {
+      graphVersion: status.version ?? 'unknown',
+      dataUpdatedAt: status.tileset_last_modified ? new Date(status.tileset_last_modified * 1000).toISOString() : new Date().toISOString(),
+    }
+  } catch { return { graphVersion: 'unknown', dataUpdatedAt: new Date().toISOString() } }
+}
+
 export class ValhallaProvider implements RoutingProvider {
   readonly id = 'valhalla' as const
   constructor(private readonly baseUrl: string) {}
@@ -107,12 +119,14 @@ export class ValhallaProvider implements RoutingProvider {
     const legs = result.trip?.legs ?? []; const coordinates = collectCoordinates(legs)
     if (coordinates.length < 2) throw new Error(result.trip?.status_message ?? 'VALHALLA_EMPTY_ROUTE')
     const distanceKm = result.trip?.summary?.length ?? 0
-    const [elevation, attributes] = await Promise.all([fetchElevation(this.baseUrl, coordinates), fetchRouteAttributes(this.baseUrl, coordinates)])
+    const [elevation, attributes, graph] = await Promise.all([fetchElevation(this.baseUrl, coordinates), fetchRouteAttributes(this.baseUrl, coordinates), fetchGraphMetadata(this.baseUrl)])
+    const createdAt = new Date().toISOString()
     return {
-      id: crypto.randomUUID(), name: request.mode === 'round-trip' ? 'Velvetia Rundtour' : 'Velvetia Route', createdAt: new Date().toISOString(),
+      id: crypto.randomUUID(), name: request.mode === 'round-trip' ? 'Velvetia Rundtour' : 'Velvetia Route', createdAt,
       profile: request.profile, mode: request.mode, geometry: { type: 'LineString', coordinates }, waypoints: request.waypoints,
       metrics: { distanceKm: Math.round(distanceKm * 10) / 10, durationMinutes: Math.round((result.trip?.summary?.time ?? 0) / 60), elevationGainM: elevation.gain, elevationLossM: elevation.loss, asphaltPercent: attributes.asphaltPercent, cyclewayPercent: attributes.cyclewayPercent, confidence: 'verified', elevationProfile: elevation.profile },
       warnings: attributes.analyzed ? [] : ['Oberflächen- und Radweganteile konnten für diese Route nicht ausgewertet werden.'],
+      provenance: { routingEngine: `Valhalla ${graph.graphVersion}`, primaryDataSource: 'OpenStreetMap / Geofabrik Schweiz', graphVersion: graph.graphVersion, dataUpdatedAt: graph.dataUpdatedAt, analyzedAt: createdAt, regionId: 'ch', confidence: attributes.analyzed && elevation.profile.length ? 'high' : 'medium' },
     }
   }
 }

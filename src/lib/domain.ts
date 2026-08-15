@@ -28,6 +28,16 @@ export type RoutePreferences = {
   safety: 'quiet' | 'balanced' | 'direct'
 }
 
+export type RouteProvenance = {
+  routingEngine: string
+  primaryDataSource: string
+  graphVersion: string
+  dataUpdatedAt: string
+  analyzedAt: string
+  regionId: string
+  confidence: 'low' | 'medium' | 'high'
+}
+
 export type PlannedRoute = {
   id: string
   name: string
@@ -38,6 +48,7 @@ export type PlannedRoute = {
   waypoints: Waypoint[]
   metrics: RouteMetrics
   warnings: string[]
+  provenance: RouteProvenance
   favorite?: boolean
 }
 
