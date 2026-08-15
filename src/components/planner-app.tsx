@@ -1,7 +1,7 @@
 'use client'
 
 import Image from 'next/image'
-import { Bike, Bookmark, Check, ChevronDown, CircleHelp, Clock3, Copy, Download, Languages, MapPin, Menu, Moon, Mountain, Navigation, Redo2, RotateCcw, Route as RouteIcon, Save, Search, Sparkles, Star, Sun, Trash2, Undo2, X } from 'lucide-react'
+import { Bike, Bookmark, Check, ChevronDown, CircleHelp, Clock3, Copy, Download, FileUp, Languages, MapPin, Menu, Moon, Mountain, Navigation, Redo2, RotateCcw, Route as RouteIcon, Save, Search, Sparkles, Star, Sun, Trash2, Undo2, X } from 'lucide-react'
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import logoLight from '../../velvetia-full-light.png'
 import logoDark from '../../velvetia-full-dark.png'
@@ -9,6 +9,7 @@ import markLight from '../../velvetia-light.png'
 import markDark from '../../velvetia-dark.png'
 import type { BikeProfile, Locale, PlannedRoute, RouteMode, RoutePreferences, Waypoint } from '@/lib/domain'
 import { downloadGpx } from '@/lib/gpx'
+import { GpxImportError, MAX_GPX_FILE_BYTES, parseGpx } from '@/lib/gpx-import'
 import { t } from '@/lib/i18n'
 import { MapCanvas } from './map-canvas'
 import { Onboarding } from './onboarding'
@@ -57,6 +58,7 @@ export function PlannerApp() {
   const [savedSort, setSavedSort] = useState<'updated' | 'name' | 'distance'>('updated')
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
   const [showRouteDetails, setShowRouteDetails] = useState(true)
+  const gpxInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const hydration = window.setTimeout(() => {
@@ -146,8 +148,34 @@ export function PlannerApp() {
 
   const persistedRoute = route ? savedRoutes.find((saved) => saved.id === route.id) : undefined
   const hasUnsavedChanges = Boolean(route && (!persistedRoute || routeSignature(route) !== routeSignature(persistedRoute)))
+  const isGpxImport = route?.provenance.routingEngine === 'GPX Import'
 
   function toggleTheme() { const next = theme === 'light' ? 'dark' : 'light'; setTheme(next); localStorage.setItem(THEME_KEY, next) }
+  async function importGpx(file: File) {
+    const de = locale === 'de'
+    try {
+      if (file.size > MAX_GPX_FILE_BYTES) throw new Error('file-too-large')
+      const imported = parseGpx(await file.text(), file.name, locale, profile)
+      routeRequestRef.current?.abort()
+      setRoute(imported); dispatchWaypoints({ type: 'reset', waypoints: imported.waypoints }); setMode(imported.mode)
+      setDistance(Math.max(5, Math.min(250, Math.round(imported.metrics.distanceKm / 5) * 5)))
+      setShowRouteDetails(true); setActiveProfileIndex(null); setMobilePanel(false)
+      setNotice(de ? `„${imported.name}“ wurde unverändert importiert.` : `“${imported.name}” was imported without changing its geometry.`)
+    } catch (error) {
+      const code = error instanceof GpxImportError ? error.code : error instanceof Error ? error.message : 'invalid-xml'
+      const messages: Record<string, [string, string]> = {
+        'file-too-large': ['Die GPX-Datei ist grösser als 5 MB.', 'The GPX file is larger than 5 MB.'],
+        'unsafe-xml': ['Die Datei enthält aus Sicherheitsgründen nicht erlaubte XML-Deklarationen.', 'The file contains XML declarations that are not permitted for security reasons.'],
+        'too-many-points': ['Die Datei enthält mehr als 20’000 Punkte.', 'The file contains more than 20,000 points.'],
+        'too-many-segments': ['Die Datei enthält mehr als 50 Track-Segmente.', 'The file contains more than 50 track segments.'],
+        'not-enough-points': ['Die Datei enthält keine verwendbare Route.', 'The file does not contain a usable route.'],
+        'invalid-xml': ['Die GPX-Datei ist ungültig oder beschädigt.', 'The GPX file is invalid or damaged.'],
+      }
+      setNotice((messages[code] ?? messages['invalid-xml'])[de ? 0 : 1])
+    } finally {
+      if (gpxInputRef.current) gpxInputRef.current.value = ''
+    }
+  }
   function openSavedRoute(saved: PlannedRoute) {
     const editable = ensureEditableAnchors(saved)
     setRoute(editable); dispatchWaypoints({ type: 'reset', waypoints: editable.waypoints }); setMode(editable.mode); setProfile(editable.profile); setShowSaved(false); setMobilePanel(false)
@@ -212,6 +240,7 @@ export function PlannerApp() {
 
       {notice && <div className="notice" role="status">{notice}</div>}
       <button className="primary-button plan-button" onClick={planRoute} disabled={isPlanning}>{isPlanning ? <><span className="spinner" />{copy.planning}</> : <><Sparkles size={19} />{copy.calculate}</>}</button>
+      <label className="secondary-button import-button"><FileUp size={18} />{locale === 'de' ? 'GPX importieren' : 'Import GPX'}<input ref={gpxInputRef} className="sr-only" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml" aria-label={locale === 'de' ? 'GPX-Datei auswählen' : 'Choose GPX file'} onChange={(event) => { const file = event.target.files?.[0]; if (file) void importGpx(file) }} /></label>
       <button className={`advanced-button ${showAdvanced ? 'is-open' : ''}`} onClick={() => setShowAdvanced(!showAdvanced)} aria-expanded={showAdvanced}>{locale === 'de' ? 'Erweiterte Wünsche' : 'Advanced preferences'} <ChevronDown size={17} /></button>
       {showAdvanced && <div className="advanced-panel">
         <PreferenceSelect label={locale === 'de' ? 'Untergrund' : 'Surface'} value={preferences.surface} onChange={(surface) => setPreferences({ ...preferences, surface })} options={[
@@ -227,20 +256,20 @@ export function PlannerApp() {
     </aside>
 
     {route && <section className="route-summary" aria-label={locale === 'de' ? 'Routenzusammenfassung' : 'Route summary'}>
-      <div className="route-summary-head"><div><p className="eyebrow">{copy.routeReady}</p><input className="route-name-input" value={route.name} maxLength={80} aria-label={locale === 'de' ? 'Routenname' : 'Route name'} onChange={(event) => setRoute({ ...route, name: event.target.value })} /><textarea className="route-description-input" value={route.description ?? ''} maxLength={300} rows={1} placeholder={locale === 'de' ? 'Beschreibung hinzufügen …' : 'Add a description …'} aria-label={locale === 'de' ? 'Routenbeschreibung' : 'Route description'} onChange={(event) => setRoute({ ...route, description: event.target.value })} /></div><div className="route-statuses"><span className={`save-status ${hasUnsavedChanges ? 'is-dirty' : ''}`}>{hasUnsavedChanges ? (locale === 'de' ? 'Ungespeichert' : 'Unsaved') : (locale === 'de' ? 'Gespeichert' : 'Saved')}</span><span className={`preview-badge ${route.metrics.confidence === 'verified' ? 'is-verified' : ''}`}>{route.metrics.confidence === 'verified' ? (locale === 'de' ? 'OSM-Routing' : 'OSM routing') : copy.preview}</span><button className={`route-detail-toggle ${showRouteDetails ? 'is-open' : ''}`} onClick={() => setShowRouteDetails(!showRouteDetails)} aria-expanded={showRouteDetails} aria-label={showRouteDetails ? (locale === 'de' ? 'Routendetails ausblenden' : 'Hide route details') : (locale === 'de' ? 'Routendetails einblenden' : 'Show route details')}><ChevronDown size={16} /><span>{showRouteDetails ? (locale === 'de' ? 'Details ausblenden' : 'Hide details') : (locale === 'de' ? 'Details anzeigen' : 'Show details')}</span></button></div></div>
+      <div className="route-summary-head"><div><p className="eyebrow">{copy.routeReady}</p><input className="route-name-input" value={route.name} maxLength={80} aria-label={locale === 'de' ? 'Routenname' : 'Route name'} onChange={(event) => setRoute({ ...route, name: event.target.value })} /><textarea className="route-description-input" value={route.description ?? ''} maxLength={300} rows={1} placeholder={locale === 'de' ? 'Beschreibung hinzufügen …' : 'Add a description …'} aria-label={locale === 'de' ? 'Routenbeschreibung' : 'Route description'} onChange={(event) => setRoute({ ...route, description: event.target.value })} /></div><div className="route-statuses"><span className={`save-status ${hasUnsavedChanges ? 'is-dirty' : ''}`}>{hasUnsavedChanges ? (locale === 'de' ? 'Ungespeichert' : 'Unsaved') : (locale === 'de' ? 'Gespeichert' : 'Saved')}</span><span className={`preview-badge ${route.metrics.confidence === 'verified' ? 'is-verified' : ''}`}>{isGpxImport ? 'GPX Import' : route.metrics.confidence === 'verified' ? (locale === 'de' ? 'OSM-Routing' : 'OSM routing') : copy.preview}</span><button className={`route-detail-toggle ${showRouteDetails ? 'is-open' : ''}`} onClick={() => setShowRouteDetails(!showRouteDetails)} aria-expanded={showRouteDetails} aria-label={showRouteDetails ? (locale === 'de' ? 'Routendetails ausblenden' : 'Hide route details') : (locale === 'de' ? 'Routendetails einblenden' : 'Show route details')}><ChevronDown size={16} /><span>{showRouteDetails ? (locale === 'de' ? 'Details ausblenden' : 'Hide details') : (locale === 'de' ? 'Details anzeigen' : 'Show details')}</span></button></div></div>
       {showRouteDetails && <div className="route-details"><div className="metric-grid">
         <div><RouteIcon /><span>{copy.distanceLabel}</span><strong>{route.metrics.distanceKm} km</strong></div>
         <div><Clock3 /><span>{copy.time}</span><strong>{formatDuration(route.metrics.durationMinutes)}</strong></div>
         <div><Mountain /><span>{copy.elevation}</span><strong>{route.metrics.elevationGainM} m</strong></div>
-        <div><Bike /><span>{copy.surface}</span><strong>{route.metrics.asphaltPercent} %</strong></div>
+        <div><Bike /><span>{copy.surface}</span><strong>{isGpxImport ? '—' : `${route.metrics.asphaltPercent} %`}</strong></div>
       </div>
       <div className="route-detail-grid">
         <ElevationProfile metrics={route.metrics} locale={locale} activeIndex={activeProfileIndex} onActiveIndexChange={setActiveProfileIndex} />
-        <div className="surface-card"><div><span>{locale === 'de' ? 'Untergrund' : 'Surface'}</span><strong>{route.metrics.asphaltPercent}% {locale === 'de' ? 'Asphalt' : 'paved'}</strong></div><div className="surface-track"><i style={{ width: `${route.metrics.asphaltPercent}%` }} /></div><small>{route.metrics.cyclewayPercent}% {locale === 'de' ? 'geschätzter Radweganteil' : 'estimated cycleway share'}</small></div>
+        <div className="surface-card">{isGpxImport ? <div><span>{locale === 'de' ? 'Untergrund' : 'Surface'}</span><strong>{locale === 'de' ? 'Nicht analysiert' : 'Not analysed'}</strong></div> : <><div><span>{locale === 'de' ? 'Untergrund' : 'Surface'}</span><strong>{route.metrics.asphaltPercent}% {locale === 'de' ? 'Asphalt' : 'paved'}</strong></div><div className="surface-track"><i style={{ width: `${route.metrics.asphaltPercent}%` }} /></div><small>{route.metrics.cyclewayPercent}% {locale === 'de' ? 'geschätzter Radweganteil' : 'estimated cycleway share'}</small></>}</div>
       </div>
       {route.warnings.length > 0 && <ul className="warning-list">{route.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
       <RouteProvenance provenance={route.provenance} locale={locale} />
-      <p className="preview-note">{route.metrics.confidence === 'verified' ? (locale === 'de' ? 'Straßengenau berechnet mit dem lokalen Schweizer Valhalla-Routinggraphen.' : 'Road-accurate route calculated with the local Swiss Valhalla routing graph.') : copy.previewInfo}</p>
+      <p className="preview-note">{isGpxImport ? (locale === 'de' ? 'Die Geometrie entspricht unverändert der importierten Datei.' : 'The geometry is unchanged from the imported file.') : route.metrics.confidence === 'verified' ? (locale === 'de' ? 'Straßengenau berechnet mit dem lokalen Schweizer Valhalla-Routinggraphen.' : 'Road-accurate route calculated with the local Swiss Valhalla routing graph.') : copy.previewInfo}</p>
       </div>}
       <div className="route-actions"><button className="secondary-button" onClick={() => saveRoute(false)}><Save size={17} />{persistedRoute ? (locale === 'de' ? 'Änderungen speichern' : 'Save changes') : copy.save}</button>{persistedRoute && <button className="text-button" onClick={() => saveRoute(true)}><Copy size={16} />{locale === 'de' ? 'Als Kopie' : 'Save copy'}</button>}<button className="primary-button" onClick={() => downloadGpx(route)}><Download size={17} />{copy.export}</button><button className="icon-button" onClick={reset} aria-label={copy.clear}><RotateCcw size={18} /></button></div>
     </section>}

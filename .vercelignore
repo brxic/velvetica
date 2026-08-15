@@ -9,6 +9,7 @@ docs/
 *.tsbuildinfo
 src/**/*.test.ts
 src/**/*.test.tsx
+test-fixtures/
 
 # Local secrets are never part of a deployment upload
 .env.local

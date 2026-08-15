@@ -84,7 +84,8 @@ button { color: inherit; }
 .secondary-button { color: var(--ink); background: #f0f0ee; }
 .text-button { min-height: 40px; background: transparent; color: var(--muted); }
 .text-button:disabled { opacity: .3; }
-.plan-button { width: 100%; margin-top: 20px; }
+  .plan-button { width: 100%; margin-top: 20px; }
+  .import-button { width: 100%; margin-top: 8px; }
 .advanced-button { width: 100%; margin-top: 8px; padding: 9px; border: 0; display: flex; justify-content: center; align-items: center; gap: 5px; background: transparent; color: var(--muted); font-size: 11px; cursor: pointer; }
 .advanced-button svg { transition: transform .2s ease; }
 .advanced-button.is-open svg { transform: rotate(180deg); }
