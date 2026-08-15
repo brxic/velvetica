@@ -12,6 +12,7 @@ Velvetia ist eine moderne, leicht verständliche Webanwendung zur Planung indivi
 - Mountainbike ist vorerst ausgeschlossen
 - pro Planung ein Routenvorschlag, der interaktiv angepasst werden kann
 - Hauptsprache Deutsch, Englisch als zweite Sprache
+- vollständig lokalisierte Planung, Anleitung, Analyse, Provenienz und dynamische Warnungen
 - lokaler Betrieb ohne Domain oder produktive Cloud-Abhängigkeit
 - Fokus auf Karte, einfacher Bedienung und optionalen „How to use“-Hinweisen
 - gespeicherte eigene Routen werden direkt auf der Karte sichtbar

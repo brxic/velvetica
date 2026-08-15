@@ -1,4 +1,4 @@
-import type { BikeProfile, Coordinate, PlannedRoute, PlanningRequest } from '@/lib/domain'
+import type { BikeProfile, Coordinate, Locale, PlannedRoute, PlanningRequest } from '@/lib/domain'
 import type { RoutingProvider } from './provider'
 import { decodePolyline } from './polyline'
 
@@ -51,7 +51,7 @@ async function fetchElevation(baseUrl: string, coordinates: Coordinate[]) {
 
 type TraceEdge = { length?: number; surface?: string; use?: string; cycle_lane?: string; tunnel?: boolean; dismount?: boolean }
 
-export function summarizeTraceEdges(edges: TraceEdge[]) {
+export function summarizeTraceEdges(edges: TraceEdge[], locale: Locale = 'de') {
   const total = edges.reduce((sum, edge) => sum + (edge.length ?? 0), 0)
   if (!total) throw new Error('VALHALLA_ATTRIBUTES_EMPTY')
   const paved = new Set(['paved', 'paved_smooth', 'paved_rough'])
@@ -61,13 +61,13 @@ export function summarizeTraceEdges(edges: TraceEdge[]) {
   const dismount = edges.reduce((sum, edge) => sum + (edge.dismount || edge.use === 'steps' ? edge.length ?? 0 : 0), 0)
   const asphaltPercent = Math.round(asphalt / total * 100)
   const warnings: string[] = []
-  if (100 - asphaltPercent >= 10) warnings.push(`${100 - asphaltPercent} % der Route verlaufen laut OSM auf nicht befestigtem oder unbekanntem Untergrund.`)
-  if (tunnel >= .1) warnings.push(`${tunnel.toFixed(1)} km verlaufen durch Tunnel. Beleuchtung und aktuelle Befahrbarkeit vor Ort prüfen.`)
-  if (dismount >= .02) warnings.push(`${dismount.toFixed(1)} km sind als Schiebe- oder Treppenabschnitt erfasst.`)
+  if (100 - asphaltPercent >= 10) warnings.push(locale === 'de' ? `${100 - asphaltPercent} % der Route verlaufen laut OSM auf nicht befestigtem oder unbekanntem Untergrund.` : `${100 - asphaltPercent}% of the route uses unpaved or unknown surfaces according to OSM.`)
+  if (tunnel >= .1) warnings.push(locale === 'de' ? `${tunnel.toFixed(1)} km verlaufen durch Tunnel. Beleuchtung und aktuelle Befahrbarkeit vor Ort prüfen.` : `${tunnel.toFixed(1)} km run through tunnels. Check lighting and current access locally.`)
+  if (dismount >= .02) warnings.push(locale === 'de' ? `${dismount.toFixed(1)} km sind als Schiebe- oder Treppenabschnitt erfasst.` : `${dismount.toFixed(1)} km are tagged as dismount or stair sections.`)
   return { asphaltPercent, cyclewayPercent: Math.round(cycleway / total * 100), analyzed: true, warnings }
 }
 
-async function fetchRouteAttributes(baseUrl: string, coordinates: Coordinate[]) {
+async function fetchRouteAttributes(baseUrl: string, coordinates: Coordinate[], locale: Locale) {
   const stride = Math.max(1, Math.ceil(coordinates.length / 120))
   const sampled = coordinates.filter((_, index) => index % stride === 0)
   if (sampled.at(-1) !== coordinates.at(-1)) sampled.push(coordinates.at(-1)!)
@@ -81,8 +81,8 @@ async function fetchRouteAttributes(baseUrl: string, coordinates: Coordinate[]) 
     })
     if (!response.ok) throw new Error('VALHALLA_ATTRIBUTES_FAILED')
     const data = await response.json() as { edges?: TraceEdge[] }
-    return summarizeTraceEdges(data.edges ?? [])
-  } catch { return { asphaltPercent: 0, cyclewayPercent: 0, analyzed: false, warnings: ['Oberflächen- und Wegattribute konnten für diese Route nicht ausgewertet werden.'] } }
+    return summarizeTraceEdges(data.edges ?? [], locale)
+  } catch { return { asphaltPercent: 0, cyclewayPercent: 0, analyzed: false, warnings: [locale === 'de' ? 'Oberflächen- und Wegattribute konnten für diese Route nicht ausgewertet werden.' : 'Surface and path attributes could not be analyzed for this route.'] } }
 }
 
 async function fetchGraphMetadata(baseUrl: string) {
@@ -120,7 +120,7 @@ export class ValhallaProvider implements RoutingProvider {
     const response = await fetch(`${this.baseUrl.replace(/\/$/, '')}/route`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(15_000),
       body: JSON.stringify({
-        locations, costing: 'bicycle', units: 'kilometers', language: 'de-DE',
+        locations, costing: 'bicycle', units: 'kilometers', language: request.locale === 'de' ? 'de-DE' : 'en-US',
         costing_options: { bicycle: bicycleOptions },
       }),
     })
@@ -129,14 +129,14 @@ export class ValhallaProvider implements RoutingProvider {
     const legs = result.trip?.legs ?? []; const coordinates = collectCoordinates(legs)
     if (coordinates.length < 2) throw new Error(result.trip?.status_message ?? 'VALHALLA_EMPTY_ROUTE')
     const distanceKm = result.trip?.summary?.length ?? 0
-    const [elevation, attributes, graph] = await Promise.all([fetchElevation(this.baseUrl, coordinates), fetchRouteAttributes(this.baseUrl, coordinates), fetchGraphMetadata(this.baseUrl)])
+    const [elevation, attributes, graph] = await Promise.all([fetchElevation(this.baseUrl, coordinates), fetchRouteAttributes(this.baseUrl, coordinates, request.locale), fetchGraphMetadata(this.baseUrl)])
     const createdAt = new Date().toISOString()
     return {
-      id: crypto.randomUUID(), name: request.mode === 'round-trip' ? 'Velvetia Rundtour' : 'Velvetia Route', createdAt,
+      id: crypto.randomUUID(), name: request.mode === 'round-trip' ? `Velvetia ${request.locale === 'de' ? 'Rundtour' : 'Round trip'}` : 'Velvetia Route', createdAt,
       profile: request.profile, mode: request.mode, geometry: { type: 'LineString', coordinates }, waypoints: request.waypoints,
       metrics: { distanceKm: Math.round(distanceKm * 10) / 10, durationMinutes: Math.round((result.trip?.summary?.time ?? 0) / 60), elevationGainM: elevation.gain, elevationLossM: elevation.loss, asphaltPercent: attributes.asphaltPercent, cyclewayPercent: attributes.cyclewayPercent, confidence: 'verified', elevationProfile: elevation.profile },
       warnings: attributes.warnings,
-      provenance: { routingEngine: `Valhalla ${graph.graphVersion}`, primaryDataSource: 'OpenStreetMap / Geofabrik Schweiz', graphVersion: graph.graphVersion, dataUpdatedAt: graph.dataUpdatedAt, analyzedAt: createdAt, regionId: 'ch', confidence: attributes.analyzed && elevation.profile.length ? 'high' : 'medium' },
+      provenance: { routingEngine: `Valhalla ${graph.graphVersion}`, primaryDataSource: request.locale === 'de' ? 'OpenStreetMap / Geofabrik Schweiz' : 'OpenStreetMap / Geofabrik Switzerland', graphVersion: graph.graphVersion, dataUpdatedAt: graph.dataUpdatedAt, analyzedAt: createdAt, regionId: 'ch', confidence: attributes.analyzed && elevation.profile.length ? 'high' : 'medium' },
     }
   }
 }

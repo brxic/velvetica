@@ -61,7 +61,7 @@ export function PlannerApp() {
     if (!valid) { setNotice(copy.noStart); return }
     setIsPlanning(true); setNotice(null)
     try {
-      const response = await fetch('/api/routes/plan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profile, mode, targetDistanceKm: distance, waypoints: points, preferences }) })
+      const response = await fetch('/api/routes/plan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ locale, profile, mode, targetDistanceKm: distance, waypoints: points, preferences }) })
       if (!response.ok) throw new Error('Planning failed')
       setRoute(await response.json()); setMobilePanel(false)
     } catch { setNotice(locale === 'de' ? 'Die Route konnte nicht berechnet werden.' : 'The route could not be planned.') }
@@ -107,30 +107,30 @@ export function PlannerApp() {
   function toggleTheme() { const next = theme === 'light' ? 'dark' : 'light'; setTheme(next); localStorage.setItem(THEME_KEY, next) }
 
   return <main className={`app-shell theme-${theme}`}>
-    <MapCanvas activeRoute={route} savedRoutes={savedRoutes} waypoints={waypoints} onMapClick={handleMapClick} onWaypointMove={handleWaypointMove} />
+    <MapCanvas activeRoute={route} savedRoutes={savedRoutes} waypoints={waypoints} onMapClick={handleMapClick} onWaypointMove={handleWaypointMove} locale={locale} />
 
     <header className="topbar">
-      <button className="brand" onClick={reset} aria-label="Velvetia Startseite">
+      <button className="brand" onClick={reset} aria-label={locale === 'de' ? 'Velvetia Startseite' : 'Velvetia home'}>
         <Image className="brand-full" src={theme === 'light' ? logoLight : logoDark} alt="Velvetia" priority />
         <Image className="brand-mark" src={theme === 'light' ? markLight : markDark} alt="" priority />
       </button>
-      <nav aria-label="Hauptnavigation">
+      <nav aria-label={locale === 'de' ? 'Hauptnavigation' : 'Main navigation'}>
         <button className="nav-button is-active"><RouteIcon size={18} /> {copy.planner}</button>
         <button className="nav-button" onClick={() => setShowSaved(true)}><Bookmark size={18} /> {copy.saved}<span className="count">{savedRoutes.length}</span></button>
       </nav>
       <div className="topbar-actions">
         <button className="icon-button labelled" onClick={() => setShowGuide(true)}><CircleHelp size={19} /><span>{copy.guide}</span></button>
         <button className="icon-button" onClick={toggleTheme} aria-label={theme === 'light' ? (locale === 'de' ? 'Dunkles Design' : 'Dark theme') : (locale === 'de' ? 'Helles Design' : 'Light theme')}>{theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}</button>
-        <button className="icon-button" onClick={() => setLocale(locale === 'de' ? 'en' : 'de')} aria-label="Sprache wechseln"><Languages size={19} /><b>{locale.toUpperCase()}</b></button>
+        <button className="icon-button" onClick={() => setLocale(locale === 'de' ? 'en' : 'de')} aria-label={locale === 'de' ? 'Sprache wechseln' : 'Switch language'}><Languages size={19} /><b>{locale.toUpperCase()}</b></button>
       </div>
     </header>
 
-    <button className="mobile-panel-toggle" onClick={() => setMobilePanel(!mobilePanel)} aria-label="Planungsmenü öffnen">{mobilePanel ? <X /> : <Menu />}</button>
+    <button className="mobile-panel-toggle" onClick={() => setMobilePanel(!mobilePanel)} aria-label={locale === 'de' ? 'Planungsmenü öffnen' : 'Open planning menu'}>{mobilePanel ? <X /> : <Menu />}</button>
 
-    <aside className={`planner-panel ${mobilePanel ? 'is-open' : ''}`} aria-label="Routeneinstellungen">
+    <aside className={`planner-panel ${mobilePanel ? 'is-open' : ''}`} aria-label={locale === 'de' ? 'Routeneinstellungen' : 'Route settings'}>
       <div className="panel-intro"><p className="eyebrow">{locale === 'de' ? 'Schweizer Routenplaner' : 'Swiss route planner'}</p><h1>{locale === 'de' ? 'Wohin möchtest du fahren?' : 'Where do you want to ride?'}</h1><p>{locale === 'de' ? 'Suche einen Ort oder setze Punkte direkt auf der Karte. Den Rest übernimmt Velvetia.' : 'Search for a place or choose points on the map. Velvetia takes care of the rest.'}</p></div>
 
-      <div className="segmented-control" aria-label="Routentyp">
+      <div className="segmented-control" aria-label={locale === 'de' ? 'Routentyp' : 'Route type'}>
         <button className={mode === 'round-trip' ? 'is-active' : ''} onClick={() => { setMode('round-trip'); setRoute(null); dispatchWaypoints({ type: 'commit', waypoints: waypoints.filter((p) => p.kind === 'start') }) }}>{copy.roundTrip}</button>
         <button className={mode === 'one-way' ? 'is-active' : ''} onClick={() => { setMode('one-way'); setRoute(null); dispatchWaypoints({ type: 'commit', waypoints: waypoints.filter((p) => p.kind === 'start') }) }}>{copy.oneWay}</button>
       </div>
@@ -177,7 +177,7 @@ export function PlannerApp() {
       </div>}
     </aside>
 
-    {route && <section className="route-summary" aria-label="Routenzusammenfassung">
+    {route && <section className="route-summary" aria-label={locale === 'de' ? 'Routenzusammenfassung' : 'Route summary'}>
       <div className="route-summary-head"><div><p className="eyebrow">{copy.routeReady}</p><input className="route-name-input" value={route.name} maxLength={80} aria-label={locale === 'de' ? 'Routenname' : 'Route name'} onChange={(event) => setRoute({ ...route, name: event.target.value })} /></div><span className={`preview-badge ${route.metrics.confidence === 'verified' ? 'is-verified' : ''}`}>{route.metrics.confidence === 'verified' ? (locale === 'de' ? 'OSM-Routing' : 'OSM routing') : copy.preview}</span></div>
       <div className="metric-grid">
         <div><RouteIcon /><span>{copy.distanceLabel}</span><strong>{route.metrics.distanceKm} km</strong></div>
@@ -186,8 +186,8 @@ export function PlannerApp() {
         <div><Bike /><span>{copy.surface}</span><strong>{route.metrics.asphaltPercent} %</strong></div>
       </div>
       <div className="route-detail-grid">
-        <ElevationProfile metrics={route.metrics} />
-        <div className="surface-card"><div><span>Untergrund</span><strong>{route.metrics.asphaltPercent}% Asphalt</strong></div><div className="surface-track"><i style={{ width: `${route.metrics.asphaltPercent}%` }} /></div><small>{route.metrics.cyclewayPercent}% geschätzter Radweganteil</small></div>
+        <ElevationProfile metrics={route.metrics} locale={locale} />
+        <div className="surface-card"><div><span>{locale === 'de' ? 'Untergrund' : 'Surface'}</span><strong>{route.metrics.asphaltPercent}% {locale === 'de' ? 'Asphalt' : 'paved'}</strong></div><div className="surface-track"><i style={{ width: `${route.metrics.asphaltPercent}%` }} /></div><small>{route.metrics.cyclewayPercent}% {locale === 'de' ? 'geschätzter Radweganteil' : 'estimated cycleway share'}</small></div>
       </div>
       {route.warnings.length > 0 && <ul className="warning-list">{route.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
       <RouteProvenance provenance={route.provenance} locale={locale} />
@@ -207,7 +207,7 @@ export function PlannerApp() {
         </div>
       </article>)}</div>}
     </aside></div>}
-    {showGuide && <Onboarding onClose={closeGuide} />}
+    {showGuide && <Onboarding onClose={closeGuide} locale={locale} />}
 
     <footer className="font-credit">Fonts made from <a href="http://www.onlinewebfonts.com" target="_blank" rel="noreferrer">Web Fonts</a> is licensed by CC BY 4.0</footer>
   </main>

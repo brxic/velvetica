@@ -50,7 +50,7 @@ export function planPreviewRoute(request: PlanningRequest): PlannedRoute {
   const createdAt = new Date().toISOString()
 
   return {
-    id: crypto.randomUUID(), name: `Velvetia ${request.mode === 'round-trip' ? 'Rundtour' : 'Route'}`,
+    id: crypto.randomUUID(), name: `Velvetia ${request.mode === 'round-trip' ? (request.locale === 'de' ? 'Rundtour' : 'Round trip') : 'Route'}`,
     createdAt, profile: request.profile, mode: request.mode,
     geometry: { type: 'LineString', coordinates }, waypoints: request.waypoints,
     metrics: {
@@ -59,7 +59,7 @@ export function planPreviewRoute(request: PlanningRequest): PlannedRoute {
       elevationGainM, elevationLossM: request.mode === 'round-trip' ? elevationGainM : Math.round(elevationGainM * .8),
       asphaltPercent: Math.max(25, Math.min(100, asphalt[request.profile] + surfaceAdjustment)), cyclewayPercent: request.profile === 'city' ? 58 : 34, confidence: 'preview', elevationProfile,
     },
-    warnings: ['Preview-Geometrie folgt noch nicht dem realen Wegenetz.'],
-    provenance: { routingEngine: 'Velvetia Preview', primaryDataSource: 'Synthetische Vorschaugeometrie', graphVersion: 'preview-v1', dataUpdatedAt: createdAt, analyzedAt: createdAt, regionId: 'ch', confidence: 'low' },
+    warnings: [request.locale === 'de' ? 'Preview-Geometrie folgt noch nicht dem realen Wegenetz.' : 'Preview geometry does not yet follow the real road network.'],
+    provenance: { routingEngine: 'Velvetia Preview', primaryDataSource: request.locale === 'de' ? 'Synthetische Vorschaugeometrie' : 'Synthetic preview geometry', graphVersion: 'preview-v1', dataUpdatedAt: createdAt, analyzedAt: createdAt, regionId: 'ch', confidence: 'low' },
   }
 }

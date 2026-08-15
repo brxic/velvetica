@@ -53,6 +53,7 @@ export type PlannedRoute = {
 }
 
 export type PlanningRequest = {
+  locale: Locale
   profile: BikeProfile
   mode: RouteMode
   targetDistanceKm: number

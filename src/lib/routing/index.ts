@@ -16,7 +16,6 @@ export async function planRoute(request: PlanningRequest) {
   catch (error) {
     if (provider.id === 'preview' || process.env.ROUTING_FALLBACK !== 'preview') throw error
     const fallback = planPreviewRoute(request)
-    return { ...fallback, warnings: ['Routingdienst war nicht erreichbar; lokale Vorschau wird angezeigt.'] }
+    return { ...fallback, warnings: [request.locale === 'de' ? 'Routingdienst war nicht erreichbar; lokale Vorschau wird angezeigt.' : 'The routing service was unavailable; a local preview is shown.'] }
   }
 }
-

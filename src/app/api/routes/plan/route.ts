@@ -4,6 +4,7 @@ import { planRoute } from '@/lib/routing'
 const coordinate = z.tuple([z.number().min(-180).max(180), z.number().min(-90).max(90)])
 const waypoint = z.object({ id: z.string(), coordinate, label: z.string(), kind: z.enum(['start', 'end', 'via']) })
 const requestSchema = z.object({
+  locale: z.enum(['de', 'en']),
   profile: z.enum(['road', 'gravel', 'touring', 'city']),
   mode: z.enum(['round-trip', 'one-way']),
   targetDistanceKm: z.number().min(2).max(500),

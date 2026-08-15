@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react'
 import maplibregl, { type GeoJSONSource, type Map as MapLibreMap, type Marker } from 'maplibre-gl'
-import type { PlannedRoute, Waypoint } from '@/lib/domain'
+import type { Locale, PlannedRoute, Waypoint } from '@/lib/domain'
 import { SWITZERLAND } from '@/lib/domain'
 
 type Props = {
@@ -11,11 +11,12 @@ type Props = {
   waypoints: Waypoint[]
   onMapClick: (longitude: number, latitude: number) => void
   onWaypointMove: (id: string, longitude: number, latitude: number) => void
+  locale: Locale
 }
 
 const emptyCollection = (): GeoJSON.FeatureCollection => ({ type: 'FeatureCollection', features: [] })
 
-export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onWaypointMove }: Props) {
+export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onWaypointMove, locale }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
   const markersRef = useRef<Marker[]>([])
@@ -85,5 +86,5 @@ export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onW
     })
   }, [waypoints])
 
-  return <div ref={containerRef} className="map-canvas" aria-label="Interaktive Karte der Schweiz" />
+  return <div ref={containerRef} className="map-canvas" aria-label={locale === 'de' ? 'Interaktive Karte der Schweiz' : 'Interactive map of Switzerland'} />
 }

@@ -20,4 +20,9 @@ describe('Valhalla route attributes', () => {
     expect(summary.warnings).toEqual(expect.arrayContaining([expect.stringContaining('Tunnel'), expect.stringContaining('Schiebe-')]))
     expect(summary.warnings.join(' ')).not.toContain('sicher')
   })
+
+  it('localizes dynamic warnings to English', () => {
+    const summary = summarizeTraceEdges([{ length: 1, surface: 'gravel', use: 'road' }], 'en')
+    expect(summary.warnings[0]).toBe('100% of the route uses unpaved or unknown surfaces according to OSM.')
+  })
 })
