@@ -13,6 +13,8 @@ Velvetia kann ohne zusätzliche Infrastruktur als öffentliches Testdeployment a
 
 Vercel verwendet Node.js 24 und baut das Projekt mit `npm run build`. Neue Commits auf `main` erzeugen anschliessend automatisch neue Production Deployments; andere Branches und Pull Requests erhalten Preview Deployments.
 
+Velvetia verwendet auf Vercel bewusst die native Next.js-Ausgabe. `output: "standalone"` darf nicht aktiviert werden: Diese Ausgabe ist für selbst gehostete Docker-Images gedacht und kollidiert mit Vercels eigener Next.js-Trace- und Function-Erzeugung.
+
 ## Kontrolle nach dem Deployment
 
 Folgende Seiten beziehungsweise Abläufe prüfen:
