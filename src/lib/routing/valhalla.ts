@@ -49,7 +49,23 @@ async function fetchElevation(baseUrl: string, coordinates: Coordinate[]) {
   } catch { return { profile: [], gain: 0, loss: 0 } }
 }
 
-type TraceEdge = { length?: number; surface?: string; use?: string; cycle_lane?: string }
+type TraceEdge = { length?: number; surface?: string; use?: string; cycle_lane?: string; tunnel?: boolean; dismount?: boolean }
+
+export function summarizeTraceEdges(edges: TraceEdge[]) {
+  const total = edges.reduce((sum, edge) => sum + (edge.length ?? 0), 0)
+  if (!total) throw new Error('VALHALLA_ATTRIBUTES_EMPTY')
+  const paved = new Set(['paved', 'paved_smooth', 'paved_rough'])
+  const asphalt = edges.reduce((sum, edge) => sum + (paved.has(edge.surface ?? '') ? edge.length ?? 0 : 0), 0)
+  const cycleway = edges.reduce((sum, edge) => sum + (edge.use === 'cycleway' || (edge.cycle_lane && edge.cycle_lane !== 'none') ? edge.length ?? 0 : 0), 0)
+  const tunnel = edges.reduce((sum, edge) => sum + (edge.tunnel ? edge.length ?? 0 : 0), 0)
+  const dismount = edges.reduce((sum, edge) => sum + (edge.dismount || edge.use === 'steps' ? edge.length ?? 0 : 0), 0)
+  const asphaltPercent = Math.round(asphalt / total * 100)
+  const warnings: string[] = []
+  if (100 - asphaltPercent >= 10) warnings.push(`${100 - asphaltPercent} % der Route verlaufen laut OSM auf nicht befestigtem oder unbekanntem Untergrund.`)
+  if (tunnel >= .1) warnings.push(`${tunnel.toFixed(1)} km verlaufen durch Tunnel. Beleuchtung und aktuelle Befahrbarkeit vor Ort prüfen.`)
+  if (dismount >= .02) warnings.push(`${dismount.toFixed(1)} km sind als Schiebe- oder Treppenabschnitt erfasst.`)
+  return { asphaltPercent, cyclewayPercent: Math.round(cycleway / total * 100), analyzed: true, warnings }
+}
 
 async function fetchRouteAttributes(baseUrl: string, coordinates: Coordinate[]) {
   const stride = Math.max(1, Math.ceil(coordinates.length / 120))
@@ -60,19 +76,13 @@ async function fetchRouteAttributes(baseUrl: string, coordinates: Coordinate[]) 
       method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(8_000),
       body: JSON.stringify({
         shape: sampled.map(([lon, lat]) => ({ lat, lon })), costing: 'bicycle', shape_match: 'walk_or_snap',
-        filters: { action: 'include', attributes: ['edge.length', 'edge.surface', 'edge.use', 'edge.cycle_lane'] },
+        filters: { action: 'include', attributes: ['edge.length', 'edge.surface', 'edge.use', 'edge.cycle_lane', 'edge.tunnel', 'edge.dismount'] },
       }),
     })
     if (!response.ok) throw new Error('VALHALLA_ATTRIBUTES_FAILED')
     const data = await response.json() as { edges?: TraceEdge[] }
-    const edges = data.edges ?? []
-    const total = edges.reduce((sum, edge) => sum + (edge.length ?? 0), 0)
-    if (!total) throw new Error('VALHALLA_ATTRIBUTES_EMPTY')
-    const paved = new Set(['paved', 'paved_smooth', 'paved_rough'])
-    const asphalt = edges.reduce((sum, edge) => sum + (paved.has(edge.surface ?? '') ? edge.length ?? 0 : 0), 0)
-    const cycleway = edges.reduce((sum, edge) => sum + (edge.use === 'cycleway' || (edge.cycle_lane && edge.cycle_lane !== 'none') ? edge.length ?? 0 : 0), 0)
-    return { asphaltPercent: Math.round(asphalt / total * 100), cyclewayPercent: Math.round(cycleway / total * 100), analyzed: true }
-  } catch { return { asphaltPercent: 0, cyclewayPercent: 0, analyzed: false } }
+    return summarizeTraceEdges(data.edges ?? [])
+  } catch { return { asphaltPercent: 0, cyclewayPercent: 0, analyzed: false, warnings: ['Oberflächen- und Wegattribute konnten für diese Route nicht ausgewertet werden.'] } }
 }
 
 async function fetchGraphMetadata(baseUrl: string) {
@@ -125,7 +135,7 @@ export class ValhallaProvider implements RoutingProvider {
       id: crypto.randomUUID(), name: request.mode === 'round-trip' ? 'Velvetia Rundtour' : 'Velvetia Route', createdAt,
       profile: request.profile, mode: request.mode, geometry: { type: 'LineString', coordinates }, waypoints: request.waypoints,
       metrics: { distanceKm: Math.round(distanceKm * 10) / 10, durationMinutes: Math.round((result.trip?.summary?.time ?? 0) / 60), elevationGainM: elevation.gain, elevationLossM: elevation.loss, asphaltPercent: attributes.asphaltPercent, cyclewayPercent: attributes.cyclewayPercent, confidence: 'verified', elevationProfile: elevation.profile },
-      warnings: attributes.analyzed ? [] : ['Oberflächen- und Radweganteile konnten für diese Route nicht ausgewertet werden.'],
+      warnings: attributes.warnings,
       provenance: { routingEngine: `Valhalla ${graph.graphVersion}`, primaryDataSource: 'OpenStreetMap / Geofabrik Schweiz', graphVersion: graph.graphVersion, dataUpdatedAt: graph.dataUpdatedAt, analyzedAt: createdAt, regionId: 'ch', confidence: attributes.analyzed && elevation.profile.length ? 'high' : 'medium' },
     }
   }
