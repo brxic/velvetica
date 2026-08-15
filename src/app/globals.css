@@ -56,9 +56,15 @@ button { color: inherit; }
 .place-search li svg { flex: none; color: var(--red); }
 .search-loader { width: 13px; height: 13px; flex: none; border: 2px solid #ddd; border-top-color: var(--red); border-radius: 50%; animation: spin .7s linear infinite; }
 .location-row { min-height: 42px; padding: 8px 10px; border: 1px solid #e5e5e3; border-radius: 10px; display: grid; grid-template-columns: 12px 1fr 16px; align-items: center; gap: 8px; background: #fafaf9; font-size: 11px; }
+.location-row > button { width: 25px; height: 25px; margin-left: -7px; padding: 0; border: 0; border-radius: 7px; display: grid; place-items: center; background: transparent; color: var(--muted); cursor: pointer; }
+.location-row > button:hover { background: #ececea; color: var(--red); }
 .location-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--red); }
 .location-dot.via { background: var(--ink); }
 .location-dot.end { background: white; border: 2px solid var(--red); }
+.editor-toolbar { margin-top: 8px; display: flex; gap: 7px; }
+.editor-toolbar button { min-height: 32px; padding: 0 9px; border: 1px solid #dededc; border-radius: 8px; display: inline-flex; align-items: center; gap: 5px; background: white; color: var(--muted); font-size: 9px; cursor: pointer; }
+.editor-toolbar button:disabled { opacity: .35; cursor: default; }
+.editor-toolbar button:not(:disabled):hover { color: var(--ink); border-color: #bbb; }
 .profile-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .profile-card { position: relative; min-height: 62px; border: 1px solid #dededc; border-radius: 12px; padding: 10px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 4px; background: white; font-size: 11px; cursor: pointer; }
 .profile-card > svg:last-child { position: absolute; right: 8px; top: 8px; color: var(--red); }
@@ -86,6 +92,8 @@ button { color: inherit; }
 .route-summary { position: fixed; z-index: 14; left: 430px; right: 20px; bottom: 20px; max-width: 760px; margin: auto; padding: 19px 20px; background: rgba(255,255,255,.97); border: 1px solid white; border-radius: 20px; box-shadow: var(--shadow); backdrop-filter: blur(18px); }
 .route-summary-head { display: flex; justify-content: space-between; align-items: flex-start; }
 .route-summary h2 { margin: 3px 0 0; font-size: 19px; }
+.route-name-input { width: min(360px, 55vw); margin: 3px 0 0; padding: 0; border: 0; border-bottom: 1px solid transparent; outline: 0; background: transparent; color: var(--ink); font-size: 19px; font-weight: 700; }
+.route-name-input:hover, .route-name-input:focus { border-color: #ccc; }
 .preview-badge { padding: 5px 8px; border-radius: 7px; background: #fff0f1; color: var(--red); font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
 .preview-badge.is-verified { background: #eaf6ef; color: #14733c; }
 .metric-grid { margin-top: 15px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
@@ -126,17 +134,25 @@ button { color: inherit; }
 .saved-drawer { width: min(420px, 100%); height: 100%; padding: 28px; background: white; box-shadow: -20px 0 60px rgba(30,32,37,.2); }
 .drawer-head { display: flex; align-items: flex-start; justify-content: space-between; }
 .drawer-head h2 { margin: 4px 0 22px; font-size: 27px; }
+.saved-search { height: 42px; margin: -8px 0 16px; padding: 0 12px; border: 1px solid #dededc; border-radius: 11px; display: flex; align-items: center; gap: 8px; color: var(--red); }
+.saved-search input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; font-size: 11px; }
 .empty-state { padding: 70px 30px; text-align: center; color: var(--muted); }
 .empty-state svg { color: var(--red); }
 .empty-state h3 { margin: 12px 0 6px; color: var(--ink); }
 .empty-state p { font-size: 13px; line-height: 1.5; }
 .saved-list { display: grid; gap: 8px; }
-.saved-list > button { width: 100%; padding: 12px; border: 1px solid #e2e2e0; border-radius: 13px; background: white; display: grid; grid-template-columns: 40px 1fr 20px; align-items: center; gap: 10px; text-align: left; cursor: pointer; }
-.saved-list > button:hover { border-color: var(--red); }
+.saved-list article { position: relative; border: 1px solid #e2e2e0; border-radius: 13px; display: grid; grid-template-columns: 1fr auto; background: white; overflow: hidden; }
+.saved-list article:hover { border-color: var(--red); }
+.saved-main { min-width: 0; padding: 12px; border: 0; background: white; display: grid; grid-template-columns: 40px 1fr 18px; align-items: center; gap: 10px; text-align: left; cursor: pointer; }
 .saved-route-icon { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; background: #fff0f1; color: var(--red); }
 .saved-list strong, .saved-list small { display: block; }
+.saved-list strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .saved-list small { margin-top: 3px; color: var(--muted); }
 .saved-chevron { transform: rotate(-90deg); color: #aaa; }
+.saved-actions { padding: 8px 8px 8px 0; display: flex; flex-direction: column; justify-content: center; gap: 2px; }
+.saved-actions button { width: 27px; height: 27px; padding: 0; border: 0; border-radius: 7px; display: grid; place-items: center; background: transparent; color: #8b8d91; cursor: pointer; }
+.saved-actions button:hover { background: #f0f0ee; color: var(--ink); }
+.saved-actions button.is-favorite { color: var(--red); }
 
 .font-credit { position: fixed; z-index: 5; right: 56px; bottom: 4px; padding: 2px 5px; border-radius: 4px; background: rgba(255,255,255,.75); color: #555; font-size: 8px; }
 .font-credit a { color: inherit; }

@@ -38,6 +38,7 @@ export type PlannedRoute = {
   waypoints: Waypoint[]
   metrics: RouteMetrics
   warnings: string[]
+  favorite?: boolean
 }
 
 export type PlanningRequest = {
