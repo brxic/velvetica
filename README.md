@@ -17,7 +17,7 @@ Velvetia ist eine moderne, leicht verständliche Webanwendung zur Planung indivi
 - Fokus auf Karte, einfacher Bedienung und optionalen „How to use“-Hinweisen
 - gespeicherte eigene Routen werden direkt auf der Karte sichtbar
 - echte Schweizer OSM-Routen über die lokale Valhalla-Instanz
-- Höhenprofil sowie längengewichtete Oberflächen- und Radwegauswertung
+- mit Karte gekoppeltes, per Maus, Touch und Tastatur bedienbares Höhenprofil sowie längengewichtete Oberflächen- und Radwegauswertung
 - sichtbare Quelle, Graph-Datenstand und Konfidenz je neu berechneter Route
 - längengewichtete Hinweise zu Naturwegen, Tunneln und Schiebeabschnitten aus OSM-Kanten
 - Editorverlauf mit 20 Schritten Undo/Redo

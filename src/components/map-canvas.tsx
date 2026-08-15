@@ -11,12 +11,13 @@ type Props = {
   waypoints: Waypoint[]
   onMapClick: (longitude: number, latitude: number) => void
   onWaypointMove: (id: string, longitude: number, latitude: number) => void
+  activeProfileIndex: number | null
   locale: Locale
 }
 
 const emptyCollection = (): GeoJSON.FeatureCollection => ({ type: 'FeatureCollection', features: [] })
 
-export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onWaypointMove, locale }: Props) {
+export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onWaypointMove, activeProfileIndex, locale }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
   const markersRef = useRef<Marker[]>([])
@@ -45,6 +46,8 @@ export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onW
       map.addSource('active-route', { type: 'geojson', data: emptyCollection() })
       map.addLayer({ id: 'active-route-casing', type: 'line', source: 'active-route', paint: { 'line-color': '#ffffff', 'line-width': 9, 'line-opacity': .88 } })
       map.addLayer({ id: 'active-route-line', type: 'line', source: 'active-route', paint: { 'line-color': '#e00112', 'line-width': 5, 'line-opacity': 1 } })
+      map.addSource('profile-position', { type: 'geojson', data: emptyCollection() })
+      map.addLayer({ id: 'profile-position-dot', type: 'circle', source: 'profile-position', paint: { 'circle-radius': 7, 'circle-color': '#e00112', 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 3 } })
     })
     mapRef.current = map
     return () => { map.remove(); mapRef.current = null }
@@ -66,6 +69,24 @@ export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onW
     }
     if (map.loaded()) update(); else map.once('load', update)
   }, [activeRoute, savedRoutes])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    const update = () => {
+      const source = map.getSource('profile-position') as GeoJSONSource | undefined
+      const coordinates = activeRoute?.geometry.coordinates
+      const profileLength = activeRoute?.metrics.elevationProfile.length ?? 0
+      if (!source || activeProfileIndex === null || !coordinates?.length || !profileLength) {
+        source?.setData(emptyCollection())
+        return
+      }
+      const ratio = activeProfileIndex / Math.max(1, profileLength - 1)
+      const coordinate = coordinates[Math.round(ratio * (coordinates.length - 1))]
+      source.setData({ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: coordinate } })
+    }
+    if (map.loaded()) update(); else map.once('load', update)
+  }, [activeProfileIndex, activeRoute])
 
   useEffect(() => {
     const map = mapRef.current

@@ -39,6 +39,7 @@ export function PlannerApp() {
   const [showGuide, setShowGuide] = useState(false); const [showSaved, setShowSaved] = useState(false); const [mobilePanel, setMobilePanel] = useState(true)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [savedSearch, setSavedSearch] = useState('')
+  const [activeProfileIndex, setActiveProfileIndex] = useState<number | null>(null)
 
   useEffect(() => {
     const hydration = window.setTimeout(() => {
@@ -63,7 +64,7 @@ export function PlannerApp() {
     try {
       const response = await fetch('/api/routes/plan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ locale, profile, mode, targetDistanceKm: distance, waypoints: points, preferences }) })
       if (!response.ok) throw new Error('Planning failed')
-      setRoute(await response.json()); setMobilePanel(false)
+      setRoute(await response.json()); setActiveProfileIndex(null); setMobilePanel(false)
     } catch { setNotice(locale === 'de' ? 'Die Route konnte nicht berechnet werden.' : 'The route could not be planned.') }
     finally { setIsPlanning(false) }
   }
@@ -107,7 +108,7 @@ export function PlannerApp() {
   function toggleTheme() { const next = theme === 'light' ? 'dark' : 'light'; setTheme(next); localStorage.setItem(THEME_KEY, next) }
 
   return <main className={`app-shell theme-${theme}`}>
-    <MapCanvas activeRoute={route} savedRoutes={savedRoutes} waypoints={waypoints} onMapClick={handleMapClick} onWaypointMove={handleWaypointMove} locale={locale} />
+    <MapCanvas activeRoute={route} savedRoutes={savedRoutes} waypoints={waypoints} onMapClick={handleMapClick} onWaypointMove={handleWaypointMove} activeProfileIndex={activeProfileIndex} locale={locale} />
 
     <header className="topbar">
       <button className="brand" onClick={reset} aria-label={locale === 'de' ? 'Velvetia Startseite' : 'Velvetia home'}>
@@ -187,7 +188,7 @@ export function PlannerApp() {
         <div><Bike /><span>{copy.surface}</span><strong>{route.metrics.asphaltPercent} %</strong></div>
       </div>
       <div className="route-detail-grid">
-        <ElevationProfile metrics={route.metrics} locale={locale} />
+        <ElevationProfile metrics={route.metrics} locale={locale} activeIndex={activeProfileIndex} onActiveIndexChange={setActiveProfileIndex} />
         <div className="surface-card"><div><span>{locale === 'de' ? 'Untergrund' : 'Surface'}</span><strong>{route.metrics.asphaltPercent}% {locale === 'de' ? 'Asphalt' : 'paved'}</strong></div><div className="surface-track"><i style={{ width: `${route.metrics.asphaltPercent}%` }} /></div><small>{route.metrics.cyclewayPercent}% {locale === 'de' ? 'geschätzter Radweganteil' : 'estimated cycleway share'}</small></div>
       </div>
       {route.warnings.length > 0 && <ul className="warning-list">{route.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
