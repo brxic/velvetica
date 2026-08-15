@@ -114,6 +114,7 @@ export function PlannerApp() {
         <Image className="brand-full" src={theme === 'light' ? logoLight : logoDark} alt="Velvetia" priority />
         <Image className="brand-mark" src={theme === 'light' ? markLight : markDark} alt="" priority />
       </button>
+      <span className="brand-slogan">Plan less. Ride more.</span>
       <nav aria-label={locale === 'de' ? 'Hauptnavigation' : 'Main navigation'}>
         <button className="nav-button is-active"><RouteIcon size={18} /> {copy.planner}</button>
         <button className="nav-button" onClick={() => setShowSaved(true)}><Bookmark size={18} /> {copy.saved}<span className="count">{savedRoutes.length}</span></button>

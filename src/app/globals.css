@@ -23,6 +23,7 @@ button { color: inherit; }
 .brand { width: 132px; height: 38px; border: 0; padding: 0; background: transparent; cursor: pointer; position: relative; overflow: hidden; }
 .brand img { width: 100%; height: 100%; object-fit: contain; }
 .brand-mark { display: none; }
+.brand-slogan { margin-left: -12px; padding-left: 14px; border-left: 1px solid var(--line); color: var(--muted); font-size: 9px; font-weight: 700; letter-spacing: .04em; white-space: nowrap; }
 .topbar nav { display: flex; height: 100%; gap: 4px; }
 .nav-button { height: 100%; border: 0; border-bottom: 2px solid transparent; background: transparent; padding: 0 14px; display: flex; align-items: center; gap: 8px; color: var(--muted); cursor: pointer; }
 .nav-button:hover, .nav-button.is-active { color: var(--ink); border-color: var(--red); }
@@ -196,7 +197,7 @@ button { color: inherit; }
   .brand-full { display: none; }
   .brand-mark { display: block; }
   .brand { width: 46px; }
-  .topbar nav, .icon-button.labelled { display: none; }
+  .topbar nav, .icon-button.labelled, .brand-slogan { display: none; }
   .planner-panel { top: 78px; left: 10px; bottom: 10px; width: min(380px, calc(100% - 20px)); transform: translateX(calc(-100% - 20px)); transition: transform .25s ease; }
   .planner-panel.is-open { transform: translateX(0); }
   .mobile-panel-toggle { position: fixed; z-index: 25; left: 20px; bottom: 24px; width: 52px; height: 52px; border: 0; border-radius: 17px; display: grid; place-items: center; background: var(--ink); color: white; box-shadow: var(--shadow); }
