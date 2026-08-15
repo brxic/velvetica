@@ -50,3 +50,29 @@ Die mitgelieferten `License.txt`-Dateien bleiben gemeinsam mit den Fonts im Repo
 
 Dieses Repository wird zunächst lokal entwickelt. Zugangsdaten und `.env`-Dateien dürfen nicht committed werden. Für erforderliche Variablen wird später ausschließlich eine `.env.example` ohne Geheimnisse versioniert.
 
+## Lokal ausführen
+
+Voraussetzung ist Node.js 24 oder neuer.
+
+```powershell
+npm install
+Copy-Item .env.example .env.local
+npm run dev
+```
+
+Anschließend ist Velvetia unter `http://localhost:3000` erreichbar. Standardmäßig verwendet die Anwendung den lokalen Preview-Router. Eine Valhalla-Instanz kann später ausschließlich über `.env.local` aktiviert werden:
+
+```dotenv
+ROUTING_PROVIDER=valhalla
+VALHALLA_URL=http://localhost:8002
+ROUTING_FALLBACK=preview
+```
+
+Qualitätsprüfungen:
+
+```powershell
+npm run typecheck
+npm run lint
+npm test
+npm run build
+```
