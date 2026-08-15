@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react'
 import maplibregl, { type GeoJSONSource, type Map as MapLibreMap, type MapMouseEvent, type Marker } from 'maplibre-gl'
 import type { Coordinate, Locale, PlannedRoute, Waypoint } from '@/lib/domain'
 import { SWITZERLAND } from '@/lib/domain'
-import { analysisSegments, analyzeRoute } from '@/lib/route-analysis'
+import { analyzeRoute, gradeGradientStops } from '@/lib/route-analysis'
 
 type Props = {
   activeRoute: PlannedRoute | null
@@ -96,18 +96,19 @@ export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onW
     map.on('load', () => {
       map.addSource('saved-routes', { type: 'geojson', data: emptyCollection() })
       map.addLayer({ id: 'saved-routes-line', type: 'line', source: 'saved-routes', paint: { 'line-color': '#676a70', 'line-width': 3, 'line-opacity': .42, 'line-dasharray': [2, 2] } })
-      map.addSource('active-route', { type: 'geojson', data: emptyCollection() })
+      map.addSource('active-route', { type: 'geojson', data: emptyCollection(), lineMetrics: true })
       map.addLayer({ id: 'active-route-casing', type: 'line', source: 'active-route', paint: { 'line-color': '#ffffff', 'line-width': 9, 'line-opacity': .88 } })
-      map.addLayer({ id: 'active-route-line', type: 'line', source: 'active-route', paint: { 'line-color': ['interpolate', ['linear'], ['get', 'grade'], 2, '#22a559', 4, '#82b927', 6, '#d7b814', 9, '#f28c18', 12, '#e94b22', 16, '#c91524'], 'line-width': 5, 'line-opacity': 1 } })
+      map.addLayer({ id: 'active-route-line', type: 'line', source: 'active-route', paint: { 'line-gradient': ['interpolate', ['linear'], ['line-progress'], 0, '#e00112', 1, '#e00112'], 'line-width': 5, 'line-opacity': 1 } })
       map.addSource('profile-position', { type: 'geojson', data: emptyCollection() })
       map.addLayer({ id: 'profile-position-dot', type: 'circle', source: 'profile-position', paint: { 'circle-radius': 7, 'circle-color': '#e00112', 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 3 } })
       map.on('mouseenter', 'active-route-line', () => { map.getCanvas().style.cursor = 'grab' })
       map.on('mousemove', 'active-route-line', (event) => {
-        const coordinateIndex = event.features?.[0]?.properties?.index
         const route = activeRouteRef.current
-        if (typeof coordinateIndex === 'number' && route) {
+        if (route) {
+          const coordinates = route.geometry.coordinates as Coordinate[]
+          const coordinateIndex = nearestCoordinateIndex(coordinates, event.lngLat.lng, event.lngLat.lat)
           const profileLength = route.metrics.elevationProfile.length
-          profileHandlerRef.current(Math.round(coordinateIndex / Math.max(1, route.geometry.coordinates.length - 1) * Math.max(0, profileLength - 1)))
+          profileHandlerRef.current(Math.round(coordinateIndex / Math.max(1, coordinates.length - 1) * Math.max(0, profileLength - 1)))
         }
       })
       map.on('mouseleave', 'active-route-line', () => { if (!dragMarker) map.getCanvas().style.cursor = ''; profileHandlerRef.current(null) })
@@ -136,7 +137,8 @@ export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onW
       const activeSource = map.getSource('active-route') as GeoJSONSource | undefined
       if (activeRoute) {
         const analysis = analyzeRoute(activeRoute)
-        activeSource?.setData(analysis.samples.length ? analysisSegments(analysis) : { type: 'Feature', properties: { grade: 0, index: 0 }, geometry: activeRoute.geometry })
+        activeSource?.setData({ type: 'Feature', properties: {}, geometry: activeRoute.geometry })
+        map.setPaintProperty('active-route-line', 'line-gradient', ['interpolate', ['linear'], ['line-progress'], ...gradeGradientStops(analysis)])
       } else activeSource?.setData(emptyCollection())
       const savedSource = map.getSource('saved-routes') as GeoJSONSource | undefined
       savedSource?.setData({ type: 'FeatureCollection', features: savedRoutes.filter((route) => route.id !== activeRoute?.id).map((route) => ({ type: 'Feature', properties: { id: route.id }, geometry: route.geometry })) })

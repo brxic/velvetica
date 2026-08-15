@@ -86,3 +86,11 @@ export function analyzeRoute(route: PlannedRoute): RouteAnalysis {
 export function analysisSegments(analysis: RouteAnalysis): GeoJSON.FeatureCollection<GeoJSON.LineString, { grade: number; index: number }> {
   return { type: 'FeatureCollection', features: analysis.samples.slice(1).map((sample, index) => ({ type: 'Feature', properties: { grade: sample.gradePercent, index: sample.index }, geometry: { type: 'LineString', coordinates: [analysis.samples[index].coordinate, sample.coordinate] } })) }
 }
+
+export function gradeGradientStops(analysis: RouteAnalysis, maximumStops = 96) {
+  if (!analysis.samples.length) return [0, '#e00112', 1, '#e00112'] as Array<number | string>
+  const stride = Math.max(1, Math.ceil(analysis.samples.length / maximumStops))
+  const selected = analysis.samples.filter((_, index) => index % stride === 0)
+  if (selected.at(-1) !== analysis.samples.at(-1)) selected.push(analysis.samples.at(-1)!)
+  return selected.flatMap((sample) => [sample.index / Math.max(1, analysis.samples.length - 1), sample.color])
+}

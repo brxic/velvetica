@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { PlannedRoute } from './domain'
-import { analyzeRoute, gradeColor } from './route-analysis'
+import { analyzeRoute, gradeColor, gradeGradientStops } from './route-analysis'
 
 function route(elevations: number[]): PlannedRoute {
   const coordinates = elevations.map((_, index) => [7.4, 46.9 + index * .001] as [number, number])
@@ -26,5 +26,13 @@ describe('route analysis', () => {
     expect(analysis.climbs).toHaveLength(1)
     expect(analysis.climbs[0]).toMatchObject({ gainM: 36 })
     expect(analysis.climbs[0].distanceKm).toBeGreaterThanOrEqual(.5)
+  })
+
+  it('creates a bounded continuous line gradient including both ends', () => {
+    const analysis = analyzeRoute(route(Array.from({ length: 250 }, (_, index) => 500 + index / 2)))
+    const stops = gradeGradientStops(analysis, 20)
+    expect(stops[0]).toBe(0)
+    expect(stops.at(-2)).toBe(1)
+    expect(stops.length).toBeLessThanOrEqual(44)
   })
 })

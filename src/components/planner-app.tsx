@@ -1,7 +1,7 @@
 'use client'
 
 import Image from 'next/image'
-import { Bike, Bookmark, Check, ChevronDown, CircleHelp, Clock3, Copy, Download, FileUp, Languages, MapPin, Menu, Moon, Mountain, Navigation, Redo2, RotateCcw, Route as RouteIcon, Save, Search, Sparkles, Star, Sun, Trash2, Undo2, X } from 'lucide-react'
+import { Bike, Bookmark, Check, ChevronDown, CircleHelp, Clock3, Copy, Download, FileUp, Languages, MapPin, Menu, Moon, Mountain, MousePointer2, Navigation, Redo2, RotateCcw, Route as RouteIcon, Save, Search, Sparkles, Star, Sun, Trash2, Undo2, X } from 'lucide-react'
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import logoLight from '../../velvetia-full-light.png'
 import logoDark from '../../velvetia-full-dark.png'
@@ -204,6 +204,8 @@ export function PlannerApp() {
     </header>
 
     <button className={`mobile-panel-toggle ${mobilePanel ? 'is-panel-open' : ''}`} onClick={() => setMobilePanel(!mobilePanel)} aria-label={mobilePanel ? (locale === 'de' ? 'Planungsmenü schliessen' : 'Close planning menu') : (locale === 'de' ? 'Planungsmenü öffnen' : 'Open planning menu')}>{mobilePanel ? <X /> : <Menu />}</button>
+
+    {route ? <div className="route-edit-hint" role="note"><MousePointer2 size={17} /><span>{locale === 'de' ? 'Route bearbeiten: Linie ziehen oder antippen' : 'Edit route: drag or tap the line'}</span></div> : null}
 
     <aside className={`planner-panel ${mobilePanel ? 'is-open' : ''}`} aria-label={locale === 'de' ? 'Routeneinstellungen' : 'Route settings'}>
       <div className="panel-intro"><p className="eyebrow">{locale === 'de' ? 'Schweizer Routenplaner' : 'Swiss route planner'}</p><h1>{locale === 'de' ? 'Wohin möchtest du fahren?' : 'Where do you want to ride?'}</h1><p>{locale === 'de' ? 'Suche einen Ort oder setze Punkte direkt auf der Karte. Den Rest übernimmt Velvetia.' : 'Search for a place or choose points on the map. Velvetia takes care of the rest.'}</p></div>

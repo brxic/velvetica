@@ -8,12 +8,12 @@ const guides = {
   de: [
     { icon: MapPin, title: 'Start setzen', text: 'Klicke auf die Karte oder nutze die Ortssuche, um deinen Startpunkt zu wählen.' },
     { icon: Route, title: 'Tour beschreiben', text: 'Wähle Rundtour oder One-Way, Fahrradtyp und deine gewünschte Distanz.' },
-    { icon: MousePointer2, title: 'Einfach anpassen', text: 'Prüfe den Vorschlag und verschiebe Wegpunkte, bis die Route genau zu dir passt.' },
+    { icon: MousePointer2, title: 'Einfach anpassen', text: 'Ziehe die farbige Routenlinie an eine neue Stelle oder tippe sie an. Velvetia setzt dort automatisch einen Bearbeitungspunkt.' },
   ],
   en: [
     { icon: MapPin, title: 'Choose a start', text: 'Click the map or use place search to choose your starting point.' },
     { icon: Route, title: 'Describe your ride', text: 'Choose round trip or one-way, your bike type and preferred distance.' },
-    { icon: MousePointer2, title: 'Adjust with ease', text: 'Review the suggestion and move waypoints until the route fits you.' },
+    { icon: MousePointer2, title: 'Adjust with ease', text: 'Drag the coloured route line to a new place or tap it. Velvetia automatically adds an editing point there.' },
   ],
 }
 
