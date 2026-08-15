@@ -8,7 +8,7 @@ export type Waypoint = {
   id: string
   coordinate: Coordinate
   label: string
-  kind: 'start' | 'end' | 'via'
+  kind: 'start' | 'end' | 'via' | 'shaping' | 'generated'
 }
 
 export type RouteMetrics = {
@@ -41,7 +41,9 @@ export type RouteProvenance = {
 export type PlannedRoute = {
   id: string
   name: string
+  description?: string
   createdAt: string
+  updatedAt?: string
   profile: BikeProfile
   mode: RouteMode
   geometry: GeoJSON.LineString

@@ -1,6 +1,8 @@
 import type { BikeProfile, Coordinate, Locale, PlannedRoute, PlanningRequest } from '@/lib/domain'
 import type { RoutingProvider } from './provider'
 import { decodePolyline } from './polyline'
+import { createRoundTripSeeds, evaluateRoundTrip, type RouteQuality } from './round-trip-quality'
+import { createRouteName } from '@/lib/route-name'
 
 type ValhallaLeg = { shape: string | GeoJSON.LineString }
 type ValhallaResponse = { trip?: { summary?: { length?: number; time?: number }; legs?: ValhallaLeg[]; status_message?: string } }
@@ -14,17 +16,6 @@ function collectCoordinates(legs: ValhallaLeg[]): Coordinate[] {
     const coordinates = typeof leg.shape === 'string' ? decodePolyline(leg.shape) : leg.shape.coordinates as Coordinate[]
     return index === 0 ? coordinates : coordinates.slice(1)
   })
-}
-
-function destination(origin: Coordinate, distanceKm: number, bearingDegrees: number) {
-  const radiusKm = 6371
-  const angular = distanceKm / radiusKm
-  const bearing = bearingDegrees * Math.PI / 180
-  const latitude = origin[1] * Math.PI / 180
-  const longitude = origin[0] * Math.PI / 180
-  const nextLatitude = Math.asin(Math.sin(latitude) * Math.cos(angular) + Math.cos(latitude) * Math.sin(angular) * Math.cos(bearing))
-  const nextLongitude = longitude + Math.atan2(Math.sin(bearing) * Math.sin(angular) * Math.cos(latitude), Math.cos(angular) - Math.sin(latitude) * Math.sin(nextLatitude))
-  return { lat: nextLatitude * 180 / Math.PI, lon: nextLongitude * 180 / Math.PI, type: 'through' as const }
 }
 
 async function fetchElevation(baseUrl: string, coordinates: Coordinate[]) {
@@ -63,7 +54,10 @@ export function summarizeTraceEdges(edges: TraceEdge[], locale: Locale = 'de') {
   const warnings: string[] = []
   if (100 - asphaltPercent >= 10) warnings.push(locale === 'de' ? `${100 - asphaltPercent} % der Route verlaufen laut OSM auf nicht befestigtem oder unbekanntem Untergrund.` : `${100 - asphaltPercent}% of the route uses unpaved or unknown surfaces according to OSM.`)
   if (tunnel >= .1) warnings.push(locale === 'de' ? `${tunnel.toFixed(1)} km verlaufen durch Tunnel. Beleuchtung und aktuelle Befahrbarkeit vor Ort prüfen.` : `${tunnel.toFixed(1)} km run through tunnels. Check lighting and current access locally.`)
-  if (dismount >= .02) warnings.push(locale === 'de' ? `${dismount.toFixed(1)} km sind als Schiebe- oder Treppenabschnitt erfasst.` : `${dismount.toFixed(1)} km are tagged as dismount or stair sections.`)
+  if (dismount >= .02) {
+    const dismountDistance = dismount < .1 ? `${Math.round(dismount * 1000)} m` : `${dismount.toFixed(1)} km`
+    warnings.push(locale === 'de' ? `${dismountDistance} sind als Schiebe- oder Treppenabschnitt erfasst.` : `${dismountDistance} are tagged as dismount or stair sections.`)
+  }
   return { asphaltPercent, cyclewayPercent: Math.round(cycleway / total * 100), analyzed: true, warnings }
 }
 
@@ -102,14 +96,6 @@ export class ValhallaProvider implements RoutingProvider {
   constructor(private readonly baseUrl: string) {}
 
   async plan(request: PlanningRequest): Promise<PlannedRoute> {
-    const locations = request.waypoints.map((point) => ({ lat: point.coordinate[1], lon: point.coordinate[0], type: point.kind === 'via' ? 'through' : 'break' }))
-    if (request.mode === 'round-trip' && locations.length === 1) {
-      const origin = request.waypoints[0].coordinate
-      const radiusKm = request.targetDistanceKm / 4.5
-      const bearing = Math.abs(Math.round((origin[0] * 1000 + origin[1] * 100) % 180))
-      locations.push(destination(origin, radiusKm, bearing), destination(origin, radiusKm, bearing + 90))
-    }
-    if (request.mode === 'round-trip') locations.push({ ...locations[0], type: 'break' })
     const bicycleOptions = {
       bicycle_type: bicycleType[request.profile],
       cycling_speed: request.profile === 'road' ? 25 : request.profile === 'gravel' ? 20 : 18,
@@ -117,25 +103,72 @@ export class ValhallaProvider implements RoutingProvider {
       use_hills: request.preferences.climbing === 'avoid' ? .05 : request.preferences.climbing === 'challenge' ? .8 : .4,
       avoid_bad_surfaces: request.preferences.surface === 'mostly-paved' ? .95 : request.preferences.surface === 'unpaved-friendly' ? .1 : request.profile === 'road' ? .85 : .35,
     }
-    const response = await fetch(`${this.baseUrl.replace(/\/$/, '')}/route`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(15_000),
-      body: JSON.stringify({
-        locations, costing: 'bicycle', units: 'kilometers', language: request.locale === 'de' ? 'de-DE' : 'en-US',
-        costing_options: { bicycle: bicycleOptions },
-      }),
-    })
-    if (!response.ok) throw new Error(`VALHALLA_HTTP_${response.status}`)
-    const result = await response.json() as ValhallaResponse
-    const legs = result.trip?.legs ?? []; const coordinates = collectCoordinates(legs)
-    if (coordinates.length < 2) throw new Error(result.trip?.status_message ?? 'VALHALLA_EMPTY_ROUTE')
-    const distanceKm = result.trip?.summary?.length ?? 0
+    const routeCandidate = async (locations: Array<{ lat: number; lon: number; type: 'break' | 'through' }>) => {
+      const response = await fetch(`${this.baseUrl.replace(/\/$/, '')}/route`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(20_000),
+        body: JSON.stringify({
+          locations, costing: 'bicycle', units: 'kilometers', language: request.locale === 'de' ? 'de-DE' : 'en-US',
+          costing_options: { bicycle: bicycleOptions },
+        }),
+      })
+      if (!response.ok) throw new Error(`VALHALLA_HTTP_${response.status}`)
+      const result = await response.json() as ValhallaResponse
+      const coordinates = collectCoordinates(result.trip?.legs ?? [])
+      if (coordinates.length < 2) throw new Error(result.trip?.status_message ?? 'VALHALLA_EMPTY_ROUTE')
+      return { coordinates, distanceKm: result.trip?.summary?.length ?? 0, durationSeconds: result.trip?.summary?.time ?? 0 }
+    }
+
+    const explicitLocations = request.waypoints.map((point) => ({ lat: point.coordinate[1], lon: point.coordinate[0], type: point.kind === 'via' || point.kind === 'shaping' || point.kind === 'generated' ? 'through' as const : 'break' as const }))
+    let selected: Awaited<ReturnType<typeof routeCandidate>>
+    let selectedQuality: RouteQuality | undefined
+    let generatedWaypoints: PlanningRequest['waypoints'] = []
+
+    if (request.mode === 'round-trip' && explicitLocations.length === 1) {
+      const origin = request.waypoints[0].coordinate
+      const originLocation = explicitLocations[0]
+      const runSeeds = async (radiusScale: number) => {
+        const settled = await Promise.allSettled(createRoundTripSeeds(origin, request.targetDistanceKm, radiusScale).map(async (seed) => {
+          const candidate = await routeCandidate([originLocation, ...seed.locations, originLocation])
+          return { candidate, seed, quality: evaluateRoundTrip(candidate.coordinates, origin, candidate.distanceKm, request.targetDistanceKm) }
+        }))
+        return settled.flatMap((result) => result.status === 'fulfilled' ? [result.value] : [])
+      }
+
+      let candidates = await runSeeds(1)
+      if (!candidates.length) throw new Error('VALHALLA_NO_ROUND_TRIP_CANDIDATE')
+      candidates.sort((a, b) => a.quality.score - b.quality.score)
+
+      if (!candidates[0].quality.acceptable) {
+        const correction = Math.max(.72, Math.min(1.28, request.targetDistanceKm / Math.max(1, candidates[0].candidate.distanceKm)))
+        const retryScales = [correction, Math.max(.62, correction * .82), Math.min(1.38, correction * 1.18)]
+        const retries = await Promise.all(retryScales.map(runSeeds))
+        candidates = [...candidates, ...retries.flat()].sort((a, b) => a.quality.score - b.quality.score)
+      }
+
+      selected = candidates[0].candidate
+      selectedQuality = candidates[0].quality
+      generatedWaypoints = candidates[0].seed.locations.map((location, index) => ({
+        id: `generated-${candidates[0].seed.id}-${index}`,
+        coordinate: [location.lon, location.lat],
+        label: `Generated anchor ${index + 1}`,
+        kind: 'generated',
+      }))
+    } else {
+      const locations = request.mode === 'round-trip' ? [...explicitLocations, explicitLocations[0]] : explicitLocations
+      selected = await routeCandidate(locations)
+    }
+
+    const { coordinates, distanceKm, durationSeconds } = selected
     const [elevation, attributes, graph] = await Promise.all([fetchElevation(this.baseUrl, coordinates), fetchRouteAttributes(this.baseUrl, coordinates, request.locale), fetchGraphMetadata(this.baseUrl)])
     const createdAt = new Date().toISOString()
+    const qualityWarning = selectedQuality && !selectedQuality.acceptable
+      ? [request.locale === 'de' ? 'Die beste verfügbare Rundtour weicht stärker als üblich vom gewünschten Verlauf ab. Prüfe sie vor der Fahrt oder setze einen Via-Punkt.' : 'The best available round trip differs more than usual from the requested shape. Review it before riding or add a via point.']
+      : []
     return {
-      id: crypto.randomUUID(), name: request.mode === 'round-trip' ? `Velvetia ${request.locale === 'de' ? 'Rundtour' : 'Round trip'}` : 'Velvetia Route', createdAt,
-      profile: request.profile, mode: request.mode, geometry: { type: 'LineString', coordinates }, waypoints: request.waypoints,
-      metrics: { distanceKm: Math.round(distanceKm * 10) / 10, durationMinutes: Math.round((result.trip?.summary?.time ?? 0) / 60), elevationGainM: elevation.gain, elevationLossM: elevation.loss, asphaltPercent: attributes.asphaltPercent, cyclewayPercent: attributes.cyclewayPercent, confidence: 'verified', elevationProfile: elevation.profile },
-      warnings: attributes.warnings,
+      id: crypto.randomUUID(), name: createRouteName(request.locale, request.profile, request.mode, request.waypoints), createdAt, updatedAt: createdAt,
+      profile: request.profile, mode: request.mode, geometry: { type: 'LineString', coordinates }, waypoints: [...request.waypoints, ...generatedWaypoints],
+      metrics: { distanceKm: Math.round(distanceKm * 10) / 10, durationMinutes: Math.round(durationSeconds / 60), elevationGainM: elevation.gain, elevationLossM: elevation.loss, asphaltPercent: attributes.asphaltPercent, cyclewayPercent: attributes.cyclewayPercent, confidence: 'verified', elevationProfile: elevation.profile },
+      warnings: [...qualityWarning, ...attributes.warnings],
       provenance: { routingEngine: `Valhalla ${graph.graphVersion}`, primaryDataSource: request.locale === 'de' ? 'OpenStreetMap / Geofabrik Schweiz' : 'OpenStreetMap / Geofabrik Switzerland', graphVersion: graph.graphVersion, dataUpdatedAt: graph.dataUpdatedAt, analyzedAt: createdAt, regionId: 'ch', confidence: attributes.analyzed && elevation.profile.length ? 'high' : 'medium' },
     }
   }

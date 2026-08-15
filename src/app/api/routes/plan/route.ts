@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { planRoute } from '@/lib/routing'
 
 const coordinate = z.tuple([z.number().min(-180).max(180), z.number().min(-90).max(90)])
-const waypoint = z.object({ id: z.string(), coordinate, label: z.string(), kind: z.enum(['start', 'end', 'via']) })
+const waypoint = z.object({ id: z.string(), coordinate, label: z.string(), kind: z.enum(['start', 'end', 'via', 'shaping', 'generated']) })
 const requestSchema = z.object({
   locale: z.enum(['de', 'en']),
   profile: z.enum(['road', 'gravel', 'touring', 'city']),

@@ -1,4 +1,5 @@
 import type { BikeProfile, Coordinate, PlannedRoute, PlanningRequest } from './domain'
+import { createRouteName } from './route-name'
 
 const speed: Record<BikeProfile, number> = { road: 25, gravel: 20, touring: 18, city: 17 }
 const asphalt: Record<BikeProfile, number> = { road: 96, gravel: 62, touring: 84, city: 91 }
@@ -50,7 +51,7 @@ export function planPreviewRoute(request: PlanningRequest): PlannedRoute {
   const createdAt = new Date().toISOString()
 
   return {
-    id: crypto.randomUUID(), name: `Velvetia ${request.mode === 'round-trip' ? (request.locale === 'de' ? 'Rundtour' : 'Round trip') : 'Route'}`,
+    id: crypto.randomUUID(), name: createRouteName(request.locale, request.profile, request.mode, request.waypoints),
     createdAt, profile: request.profile, mode: request.mode,
     geometry: { type: 'LineString', coordinates }, waypoints: request.waypoints,
     metrics: {
