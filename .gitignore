@@ -50,4 +50,6 @@ blob-report/
 minio-data/
 postgres-data/
 redis-data/
-
+!infrastructure/valhalla/data/
+infrastructure/valhalla/data/*
+!infrastructure/valhalla/data/.gitkeep

@@ -60,7 +60,11 @@ Copy-Item .env.example .env.local
 npm run dev
 ```
 
-Anschließend ist Velvetia unter `http://localhost:3000` erreichbar. Standardmäßig verwendet die Anwendung den lokalen Preview-Router. Eine Valhalla-Instanz kann später ausschließlich über `.env.local` aktiviert werden:
+Anschließend ist Velvetia unter `http://localhost:3000` erreichbar. Ohne Infrastruktur verwendet die Anwendung den eingebauten Preview-Router. Für echtes Routing auf Schweizer Wegen werden die lokalen Dienste gestartet und Valhalla in `.env.local` aktiviert:
+
+```powershell
+docker compose up -d
+```
 
 ```dotenv
 ROUTING_PROVIDER=valhalla
@@ -76,3 +80,5 @@ npm run lint
 npm test
 npm run build
 ```
+
+Die vollständige lokale Routing- und Datenumgebung ist in [docs/LOCAL_INFRASTRUCTURE.md](./docs/LOCAL_INFRASTRUCTURE.md) beschrieben und wird über `compose.yaml` gestartet.

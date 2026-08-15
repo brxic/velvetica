@@ -1,0 +1,62 @@
+name: velvetia
+
+services:
+  postgres:
+    image: postgis/postgis:17-3.5
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: velvetia
+      POSTGRES_USER: velvetia
+      POSTGRES_PASSWORD: velvetia-local-only
+    ports:
+      - "5432:5432"
+    volumes:
+      - velvetia-postgres:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U velvetia -d velvetia"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - velvetia-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  valhalla:
+    image: ghcr.io/valhalla/valhalla-scripted:latest
+    restart: unless-stopped
+    environment:
+      tile_urls: https://download.geofabrik.de/europe/switzerland-latest.osm.pbf
+      build_admins: "True"
+      build_time_zones: "True"
+      build_elevation: "True"
+      build_transit: "False"
+      serve_tiles: "True"
+      use_tiles_ignore_pbf: "True"
+      server_threads: "2"
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./infrastructure/valhalla/data:/custom_files
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8002/status || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 40
+      start_period: 10m
+
+volumes:
+  velvetia-postgres:
+  velvetia-redis:
+

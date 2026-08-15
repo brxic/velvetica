@@ -43,7 +43,10 @@ export function planPreviewRoute(request: PlanningRequest): PlannedRoute {
     coordinates = [start.coordinate, ...(request.waypoints.filter((p) => p.kind === 'via').map((p) => p.coordinate)), end?.coordinate ?? destination(start.coordinate, request.targetDistanceKm, 75)]
   }
   const distanceKm = coordinates.slice(1).reduce((sum, point, index) => sum + haversine(coordinates[index], point), 0)
-  const elevationGainM = Math.round(distanceKm * (request.profile === 'road' ? 8.2 : request.profile === 'gravel' ? 10.4 : 6.3))
+  const climbingFactor = request.preferences.climbing === 'avoid' ? .62 : request.preferences.climbing === 'challenge' ? 1.45 : 1
+  const elevationGainM = Math.round(distanceKm * (request.profile === 'road' ? 8.2 : request.profile === 'gravel' ? 10.4 : 6.3) * climbingFactor)
+  const surfaceAdjustment = request.preferences.surface === 'mostly-paved' ? 4 : request.preferences.surface === 'unpaved-friendly' ? -20 : 0
+  const elevationProfile = Array.from({ length: 48 }, (_, index) => Math.round(410 + Math.sin(index / 4.2) * 65 * climbingFactor + Math.sin(index / 1.9) * 18 + index * (request.mode === 'round-trip' ? 0 : 1.4)))
 
   return {
     id: crypto.randomUUID(), name: `Velvetia ${request.mode === 'round-trip' ? 'Rundtour' : 'Route'}`,
@@ -53,7 +56,7 @@ export function planPreviewRoute(request: PlanningRequest): PlannedRoute {
       distanceKm: Math.round(distanceKm * 10) / 10,
       durationMinutes: Math.round(distanceKm / speed[request.profile] * 60),
       elevationGainM, elevationLossM: request.mode === 'round-trip' ? elevationGainM : Math.round(elevationGainM * .8),
-      asphaltPercent: asphalt[request.profile], cyclewayPercent: request.profile === 'city' ? 58 : 34, confidence: 'preview',
+      asphaltPercent: Math.max(25, Math.min(100, asphalt[request.profile] + surfaceAdjustment)), cyclewayPercent: request.profile === 'city' ? 58 : 34, confidence: 'preview', elevationProfile,
     },
     warnings: ['Preview-Geometrie folgt noch nicht dem realen Wegenetz.'],
   }

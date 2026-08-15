@@ -19,6 +19,13 @@ export type RouteMetrics = {
   asphaltPercent: number
   cyclewayPercent: number
   confidence: 'preview' | 'verified'
+  elevationProfile: number[]
+}
+
+export type RoutePreferences = {
+  surface: 'mostly-paved' | 'balanced' | 'unpaved-friendly'
+  climbing: 'avoid' | 'balanced' | 'challenge'
+  safety: 'quiet' | 'balanced' | 'direct'
 }
 
 export type PlannedRoute = {
@@ -38,6 +45,7 @@ export type PlanningRequest = {
   mode: RouteMode
   targetDistanceKm: number
   waypoints: Waypoint[]
+  preferences: RoutePreferences
 }
 
 export const SWITZERLAND = {
@@ -51,4 +59,3 @@ export const SWITZERLAND = {
   mapStyle: 'https://vectortiles.geo.admin.ch/styles/ch.swisstopo.lightbasemap.vt/style.json',
   attribution: '© Data: swisstopo · © OpenStreetMap contributors',
 } as const
-

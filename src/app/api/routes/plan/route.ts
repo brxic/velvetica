@@ -8,6 +8,11 @@ const requestSchema = z.object({
   mode: z.enum(['round-trip', 'one-way']),
   targetDistanceKm: z.number().min(2).max(500),
   waypoints: z.array(waypoint).min(1).max(20),
+  preferences: z.object({
+    surface: z.enum(['mostly-paved', 'balanced', 'unpaved-friendly']),
+    climbing: z.enum(['avoid', 'balanced', 'challenge']),
+    safety: z.enum(['quiet', 'balanced', 'direct']),
+  }),
 })
 
 export async function POST(request: Request) {
