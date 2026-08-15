@@ -56,6 +56,7 @@ export function PlannerApp() {
   const routeRequestRef = useRef<AbortController | null>(null)
   const [savedSort, setSavedSort] = useState<'updated' | 'name' | 'distance'>('updated')
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
+  const [showRouteDetails, setShowRouteDetails] = useState(true)
 
   useEffect(() => {
     const hydration = window.setTimeout(() => {
@@ -226,8 +227,8 @@ export function PlannerApp() {
     </aside>
 
     {route && <section className="route-summary" aria-label={locale === 'de' ? 'Routenzusammenfassung' : 'Route summary'}>
-      <div className="route-summary-head"><div><p className="eyebrow">{copy.routeReady}</p><input className="route-name-input" value={route.name} maxLength={80} aria-label={locale === 'de' ? 'Routenname' : 'Route name'} onChange={(event) => setRoute({ ...route, name: event.target.value })} /><textarea className="route-description-input" value={route.description ?? ''} maxLength={300} rows={1} placeholder={locale === 'de' ? 'Beschreibung hinzufügen …' : 'Add a description …'} aria-label={locale === 'de' ? 'Routenbeschreibung' : 'Route description'} onChange={(event) => setRoute({ ...route, description: event.target.value })} /></div><div className="route-statuses"><span className={`save-status ${hasUnsavedChanges ? 'is-dirty' : ''}`}>{hasUnsavedChanges ? (locale === 'de' ? 'Ungespeichert' : 'Unsaved') : (locale === 'de' ? 'Gespeichert' : 'Saved')}</span><span className={`preview-badge ${route.metrics.confidence === 'verified' ? 'is-verified' : ''}`}>{route.metrics.confidence === 'verified' ? (locale === 'de' ? 'OSM-Routing' : 'OSM routing') : copy.preview}</span></div></div>
-      <div className="metric-grid">
+      <div className="route-summary-head"><div><p className="eyebrow">{copy.routeReady}</p><input className="route-name-input" value={route.name} maxLength={80} aria-label={locale === 'de' ? 'Routenname' : 'Route name'} onChange={(event) => setRoute({ ...route, name: event.target.value })} /><textarea className="route-description-input" value={route.description ?? ''} maxLength={300} rows={1} placeholder={locale === 'de' ? 'Beschreibung hinzufügen …' : 'Add a description …'} aria-label={locale === 'de' ? 'Routenbeschreibung' : 'Route description'} onChange={(event) => setRoute({ ...route, description: event.target.value })} /></div><div className="route-statuses"><span className={`save-status ${hasUnsavedChanges ? 'is-dirty' : ''}`}>{hasUnsavedChanges ? (locale === 'de' ? 'Ungespeichert' : 'Unsaved') : (locale === 'de' ? 'Gespeichert' : 'Saved')}</span><span className={`preview-badge ${route.metrics.confidence === 'verified' ? 'is-verified' : ''}`}>{route.metrics.confidence === 'verified' ? (locale === 'de' ? 'OSM-Routing' : 'OSM routing') : copy.preview}</span><button className={`route-detail-toggle ${showRouteDetails ? 'is-open' : ''}`} onClick={() => setShowRouteDetails(!showRouteDetails)} aria-expanded={showRouteDetails} aria-label={showRouteDetails ? (locale === 'de' ? 'Routendetails ausblenden' : 'Hide route details') : (locale === 'de' ? 'Routendetails einblenden' : 'Show route details')}><ChevronDown size={16} /><span>{showRouteDetails ? (locale === 'de' ? 'Details ausblenden' : 'Hide details') : (locale === 'de' ? 'Details anzeigen' : 'Show details')}</span></button></div></div>
+      {showRouteDetails && <div className="route-details"><div className="metric-grid">
         <div><RouteIcon /><span>{copy.distanceLabel}</span><strong>{route.metrics.distanceKm} km</strong></div>
         <div><Clock3 /><span>{copy.time}</span><strong>{formatDuration(route.metrics.durationMinutes)}</strong></div>
         <div><Mountain /><span>{copy.elevation}</span><strong>{route.metrics.elevationGainM} m</strong></div>
@@ -240,6 +241,7 @@ export function PlannerApp() {
       {route.warnings.length > 0 && <ul className="warning-list">{route.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
       <RouteProvenance provenance={route.provenance} locale={locale} />
       <p className="preview-note">{route.metrics.confidence === 'verified' ? (locale === 'de' ? 'Straßengenau berechnet mit dem lokalen Schweizer Valhalla-Routinggraphen.' : 'Road-accurate route calculated with the local Swiss Valhalla routing graph.') : copy.previewInfo}</p>
+      </div>}
       <div className="route-actions"><button className="secondary-button" onClick={() => saveRoute(false)}><Save size={17} />{persistedRoute ? (locale === 'de' ? 'Änderungen speichern' : 'Save changes') : copy.save}</button>{persistedRoute && <button className="text-button" onClick={() => saveRoute(true)}><Copy size={16} />{locale === 'de' ? 'Als Kopie' : 'Save copy'}</button>}<button className="primary-button" onClick={() => downloadGpx(route)}><Download size={17} />{copy.export}</button><button className="icon-button" onClick={reset} aria-label={copy.clear}><RotateCcw size={18} /></button></div>
     </section>}
 

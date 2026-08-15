@@ -134,7 +134,7 @@ export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onW
         map.fitBounds(bounds, { padding, duration: 800, maxZoom: 13 })
       }
     }
-    if (map.loaded()) update(); else map.once('load', update)
+    if (map.getSource('active-route')) update(); else map.once('load', update)
   }, [activeRoute, savedRoutes])
 
   useEffect(() => {
@@ -152,7 +152,7 @@ export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onW
       const coordinate = coordinates[Math.round(ratio * (coordinates.length - 1))]
       source.setData({ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: coordinate } })
     }
-    if (map.loaded()) update(); else map.once('load', update)
+    if (map.getSource('profile-position')) update(); else map.once('load', update)
   }, [activeProfileIndex, activeRoute])
 
   useEffect(() => {
