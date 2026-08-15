@@ -1,6 +1,9 @@
 import { z } from 'zod'
 import { planRoute } from '@/lib/routing'
 
+export const runtime = 'nodejs'
+export const maxDuration = 60
+
 const coordinate = z.tuple([z.number().min(-180).max(180), z.number().min(-90).max(90)])
 const waypoint = z.object({ id: z.string(), coordinate, label: z.string(), kind: z.enum(['start', 'end', 'via', 'shaping', 'generated']) })
 const requestSchema = z.object({

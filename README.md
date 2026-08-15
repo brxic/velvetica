@@ -93,3 +93,9 @@ npm run build
 ```
 
 Die vollständige lokale Routing- und Datenumgebung ist in [docs/LOCAL_INFRASTRUCTURE.md](./docs/LOCAL_INFRASTRUCTURE.md) beschrieben und wird über `compose.yaml` gestartet.
+
+## Testdeployment auf Vercel
+
+Das Repository ist für einen Vercel-Import über GitHub vorbereitet. Ohne zusätzliche Environment Variables startet es sicher mit dem eingebauten Preview-Router; lokale Docker-Dienste werden nicht vorausgesetzt oder hochgeladen.
+
+Die vollständige Anleitung und die spätere Umschaltung auf eine externe Valhalla-Instanz stehen in [docs/VERCEL_DEPLOYMENT.md](./docs/VERCEL_DEPLOYMENT.md).

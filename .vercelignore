@@ -1,0 +1,15 @@
+# Local-only infrastructure and generated routing data
+compose.yaml
+infrastructure/
+
+# Development and test artifacts
+coverage/
+docs/
+*.log
+*.tsbuildinfo
+src/**/*.test.ts
+src/**/*.test.tsx
+
+# Local secrets are never part of a deployment upload
+.env.local
+.env.*.local
