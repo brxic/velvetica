@@ -52,7 +52,10 @@ export type PlannedRoute = {
   warnings: string[]
   provenance: RouteProvenance
   favorite?: boolean
+  serverVersion?: number
 }
+
+export type RouteVersion = { version: number; savedAt: string; route: PlannedRoute }
 
 export type PlanningRequest = {
   locale: Locale

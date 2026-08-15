@@ -44,7 +44,9 @@ Für das Testdeployment nicht die lokalen Adressen `localhost:8002`, `localhost:
 
 ## Datenbank und Redis
 
-`DATABASE_URL` und `REDIS_URL` bleiben für das Testdeployment leer. Gespeicherte Routen liegen aktuell im `localStorage` des Browsers. Wenn später serverseitige Konten und geräteübergreifende Speicherung implementiert werden, werden verwaltete, TLS-gesicherte Postgres- und Redis-Dienste verbunden.
+Ohne `DATABASE_URL` bleiben gespeicherte Routen sicher im `localStorage` des Browsers. Mit einer TLS-gesicherten, PostGIS-fähigen `DATABASE_URL` aktiviert Velvetia automatisch die serverseitige Synchronisierung und Versionshistorie. Das Schema wird beim ersten Zugriff idempotent eingerichtet. Der Drawer zeigt sichtbar entweder `PostGIS verbunden` oder `Lokaler Speicher`.
+
+Die momentane Besitztrennung verwendet eine anonyme HttpOnly-Browser-ID. Geräteübergreifender Zugriff folgt erst mit dem Authentifizierungspaket. `REDIS_URL` bleibt für das Testdeployment optional.
 
 ## CLI-Alternative
 

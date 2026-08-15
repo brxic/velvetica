@@ -46,6 +46,14 @@ REDIS_URL=redis://localhost:6379
 
 Danach `npm run dev` neu starten.
 
+## Routenspeicherung und Versionen
+
+Mit gesetzter `DATABASE_URL` synchronisiert Velvetia gespeicherte Routen zusätzlich nach PostGIS. Die Oberfläche bleibt local-first: Ist PostGIS nicht verfügbar, bleiben die Routen im Browser erhalten. Sobald die Datenbank erreichbar ist, werden neuere lokale Stände übernommen.
+
+Die Tabellen `app.routes` und `app.route_versions` werden bei neuen Volumes durch `infrastructure/postgres/init.sql` angelegt. Bei bereits existierenden Volumes führt die Anwendung dieselbe additive, idempotente Schemaeinrichtung beim ersten Zugriff auf `/api/saved-routes` aus. Jede Speicherung erzeugt atomar eine neue Version. Löschvorgänge markieren die aktuelle Route zunächst mit `deleted_at`; die Versionen bleiben erhalten.
+
+Bis zur Einführung von Benutzerkonten trennt eine zufällige, HttpOnly- und SameSite-geschützte Browser-ID die Besitzer. Sie ist kein Ersatz für ein Benutzerkonto und ermöglicht noch keine geräteübergreifende Anmeldung.
+
 ## Betriebsbereitschaft prüfen
 
 Der Endpunkt `http://localhost:3000/api/health` prüft die tatsächlich konfigurierte Routingengine, PostGIS und Redis parallel. Ein erfolgreicher Zustand antwortet mit HTTP `200` und `status: "healthy"`. Ist ein konfigurierter Dienst nicht erreichbar, antwortet er mit HTTP `503` und `status: "degraded"`; der betroffene Check steht auf `down`.

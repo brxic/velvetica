@@ -1,13 +1,13 @@
 'use client'
 
 import Image from 'next/image'
-import { Bike, Bookmark, Check, ChevronDown, CircleHelp, Clock3, Copy, Download, FileUp, Languages, MapPin, Menu, Moon, Mountain, MousePointer2, Navigation, Redo2, RotateCcw, Route as RouteIcon, Save, Search, Sparkles, Star, Sun, Trash2, Undo2, X } from 'lucide-react'
+import { Bike, Bookmark, Check, ChevronDown, CircleHelp, Clock3, Copy, Download, FileUp, History, Languages, MapPin, Menu, Moon, Mountain, MousePointer2, Navigation, Redo2, RotateCcw, Route as RouteIcon, Save, Search, Sparkles, Star, Sun, Trash2, Undo2, X } from 'lucide-react'
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import logoLight from '../../velvetia-full-light.png'
 import logoDark from '../../velvetia-full-dark.png'
 import markLight from '../../velvetia-light.png'
 import markDark from '../../velvetia-dark.png'
-import type { BikeProfile, Locale, PlannedRoute, RouteMode, RoutePreferences, Waypoint } from '@/lib/domain'
+import type { BikeProfile, Locale, PlannedRoute, RouteMode, RoutePreferences, RouteVersion, Waypoint } from '@/lib/domain'
 import { downloadGpx } from '@/lib/gpx'
 import { GpxImportError, MAX_GPX_FILE_BYTES, parseGpx } from '@/lib/gpx-import'
 import { t } from '@/lib/i18n'
@@ -28,6 +28,14 @@ const profiles: Array<{ id: BikeProfile; icon: typeof Bike }> = [
 
 function formatDuration(minutes: number) { const h = Math.floor(minutes / 60); const m = minutes % 60; return `${h} h ${String(m).padStart(2, '0')} min` }
 function routeSignature(route: PlannedRoute) { return JSON.stringify({ name: route.name.trim(), description: route.description ?? '', profile: route.profile, mode: route.mode, geometry: route.geometry, waypoints: route.waypoints.filter((point) => point.kind !== 'generated'), metrics: route.metrics }) }
+function mergeSavedRoutes(local: PlannedRoute[], remote: PlannedRoute[]) {
+  const routes = new Map<string, PlannedRoute>()
+  for (const route of [...local, ...remote]) {
+    const current = routes.get(route.id)
+    if (!current || new Date(route.updatedAt ?? route.createdAt).getTime() >= new Date(current.updatedAt ?? current.createdAt).getTime()) routes.set(route.id, route)
+  }
+  return [...routes.values()].sort((a, b) => new Date(b.updatedAt ?? b.createdAt).getTime() - new Date(a.updatedAt ?? a.createdAt).getTime()).slice(0, 100)
+}
 
 function ensureEditableAnchors(route: PlannedRoute) {
   if (route.mode !== 'round-trip' || route.waypoints.length !== 1 || route.geometry.coordinates.length < 4) return route
@@ -59,10 +67,33 @@ export function PlannerApp() {
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
   const [showRouteDetails, setShowRouteDetails] = useState(true)
   const gpxInputRef = useRef<HTMLInputElement>(null)
+  const [persistenceState, setPersistenceState] = useState<'checking' | 'server' | 'local'>('checking')
+  const [historyRouteId, setHistoryRouteId] = useState<string | null>(null)
+  const [routeVersions, setRouteVersions] = useState<RouteVersion[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
 
   useEffect(() => {
     const hydration = window.setTimeout(() => {
-      try { setSavedRoutes(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]')); setShowGuide(!localStorage.getItem(GUIDE_KEY)); setTheme(localStorage.getItem(THEME_KEY) === 'dark' ? 'dark' : 'light') } catch { setSavedRoutes([]) }
+      let local: PlannedRoute[] = []
+      try { local = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]'); setSavedRoutes(local); setShowGuide(!localStorage.getItem(GUIDE_KEY)); setTheme(localStorage.getItem(THEME_KEY) === 'dark' ? 'dark' : 'light') } catch { setSavedRoutes([]) }
+      void (async () => {
+        try {
+          const response = await fetch('/api/saved-routes')
+          if (!response.ok) throw new Error('LOCAL_ONLY')
+          const remote = (await response.json() as { routes: PlannedRoute[] }).routes
+          const remoteById = new Map(remote.map((item) => [item.id, item]))
+          const pending = local.filter((item) => {
+            const serverRoute = remoteById.get(item.id)
+            return /^[0-9a-f-]{36}$/i.test(item.id) && (!serverRoute || new Date(item.updatedAt ?? item.createdAt).getTime() > new Date(serverRoute.updatedAt ?? serverRoute.createdAt).getTime())
+          })
+          const migrated = await Promise.all(pending.map(async (item) => {
+            const saved = await fetch(`/api/saved-routes/${item.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) })
+            return saved.ok ? (await saved.json() as { route: PlannedRoute }).route : item
+          }))
+          const merged = mergeSavedRoutes(remote, migrated)
+          setSavedRoutes(merged); localStorage.setItem(STORAGE_KEY, JSON.stringify(merged)); setPersistenceState('server')
+        } catch { setPersistenceState('local') }
+      })()
     }, 0)
     return () => window.clearTimeout(hydration)
   }, [])
@@ -113,16 +144,66 @@ export function PlannerApp() {
 
   function persistSaved(next: PlannedRoute[]) { setSavedRoutes(next); localStorage.setItem(STORAGE_KEY, JSON.stringify(next)) }
 
-  function saveRoute(asCopy = false) {
+  async function syncSavedRoute(saved: PlannedRoute) {
+    try {
+      const response = await fetch(`/api/saved-routes/${saved.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(saved) })
+      if (!response.ok) throw new Error('LOCAL_ONLY')
+      setPersistenceState('server')
+      return (await response.json() as { route: PlannedRoute }).route
+    } catch { setPersistenceState('local'); return null }
+  }
+
+  async function saveRoute(asCopy = false) {
     if (!route) return
     const name = route.name.trim()
     if (!name) { setNotice(locale === 'de' ? 'Bitte gib der Route einen Namen.' : 'Please give the route a name.'); return }
     const timestamp = new Date().toISOString()
     const saved: PlannedRoute = asCopy
-      ? { ...route, id: crypto.randomUUID(), name: `${name} ${locale === 'de' ? 'Kopie' : 'copy'}`, createdAt: timestamp, updatedAt: timestamp, favorite: false }
+      ? { ...route, id: crypto.randomUUID(), name: `${name} ${locale === 'de' ? 'Kopie' : 'copy'}`, createdAt: timestamp, updatedAt: timestamp, favorite: false, serverVersion: undefined }
       : { ...route, name, updatedAt: timestamp }
     const next = [saved, ...savedRoutes.filter((item) => item.id !== saved.id)].slice(0, 50)
-    persistSaved(next); setRoute(saved); setNotice(asCopy ? (locale === 'de' ? 'Als neue Route gespeichert.' : 'Saved as a new route.') : (locale === 'de' ? 'Route lokal gespeichert.' : 'Route saved locally.'))
+    persistSaved(next); setRoute(saved)
+    const serverSaved = await syncSavedRoute(saved)
+    if (serverSaved) {
+      const synced = [serverSaved, ...next.filter((item) => item.id !== serverSaved.id)]
+      persistSaved(synced); setRoute(serverSaved)
+    }
+    setNotice(asCopy ? (locale === 'de' ? 'Als neue Route gespeichert.' : 'Saved as a new route.') : serverSaved ? (locale === 'de' ? `Route gespeichert · Version ${serverSaved.serverVersion}` : `Route saved · version ${serverSaved.serverVersion}`) : (locale === 'de' ? 'Route lokal gespeichert.' : 'Route saved locally.'))
+  }
+
+  async function toggleFavorite(saved: PlannedRoute) {
+    const updated = { ...saved, favorite: !saved.favorite, updatedAt: new Date().toISOString() }
+    persistSaved(savedRoutes.map((item) => item.id === saved.id ? updated : item)); await syncSavedRoute(updated)
+  }
+
+  async function duplicateRoute(saved: PlannedRoute) {
+    const timestamp = new Date().toISOString(); const duplicate = { ...saved, id: crypto.randomUUID(), name: `${saved.name} ${locale === 'de' ? 'Kopie' : 'copy'}`, createdAt: timestamp, updatedAt: timestamp, favorite: false, serverVersion: undefined }
+    persistSaved([duplicate, ...savedRoutes].slice(0, 100)); await syncSavedRoute(duplicate)
+  }
+
+  async function deleteRoute(id: string) {
+    persistSaved(savedRoutes.filter((item) => item.id !== id)); setPendingDelete(null); setHistoryRouteId(null)
+    try { const response = await fetch(`/api/saved-routes/${id}`, { method: 'DELETE' }); if (!response.ok) setPersistenceState('local') } catch { setPersistenceState('local') }
+  }
+
+  async function showVersions(id: string) {
+    if (historyRouteId === id) { setHistoryRouteId(null); return }
+    setHistoryRouteId(id); setHistoryLoading(true); setRouteVersions([])
+    try {
+      const response = await fetch(`/api/saved-routes/${id}/versions`)
+      if (!response.ok) throw new Error('NO_HISTORY')
+      setRouteVersions((await response.json() as { versions: RouteVersion[] }).versions)
+    } catch { setNotice(locale === 'de' ? 'Versionsverlauf ist nur mit verbundener Datenbank verfügbar.' : 'Version history requires a connected database.') }
+    finally { setHistoryLoading(false) }
+  }
+
+  async function restoreVersion(version: RouteVersion) {
+    const restored = { ...version.route, updatedAt: new Date().toISOString() }
+    const next = [restored, ...savedRoutes.filter((item) => item.id !== restored.id)]
+    persistSaved(next); setRoute(restored); dispatchWaypoints({ type: 'reset', waypoints: restored.waypoints }); setMode(restored.mode); setProfile(restored.profile); setShowSaved(false); setMobilePanel(false)
+    const serverSaved = await syncSavedRoute(restored)
+    if (serverSaved) { persistSaved([serverSaved, ...next.filter((item) => item.id !== serverSaved.id)]); setRoute(serverSaved) }
+    setNotice(locale === 'de' ? `Version ${version.version} als neue Version wiederhergestellt.` : `Version ${version.version} restored as a new version.`)
   }
 
   function reset() { setRoute(null); dispatchWaypoints({ type: 'reset' }); setNotice(null); setMobilePanel(true) }
@@ -278,15 +359,17 @@ export function PlannerApp() {
     </section>}
 
     {showSaved && <div className="drawer-backdrop" onClick={() => setShowSaved(false)}><aside className="saved-drawer" onClick={(event) => event.stopPropagation()}>
-      <div className="drawer-head"><div><p className="eyebrow">Velvetia</p><h2>{copy.saved}</h2></div><button className="icon-button" onClick={() => setShowSaved(false)} aria-label={locale === 'de' ? 'Schliessen' : 'Close'}><X /></button></div>
+      <div className="drawer-head"><div><p className="eyebrow">Velvetia</p><h2>{copy.saved}</h2><span className={`persistence-status is-${persistenceState}`}>{persistenceState === 'server' ? (locale === 'de' ? 'PostGIS verbunden' : 'PostGIS connected') : persistenceState === 'checking' ? (locale === 'de' ? 'Speicher wird geprüft …' : 'Checking storage …') : (locale === 'de' ? 'Lokaler Speicher' : 'Local storage')}</span></div><button className="icon-button" onClick={() => setShowSaved(false)} aria-label={locale === 'de' ? 'Schliessen' : 'Close'}><X /></button></div>
       {savedRoutes.length > 0 && <div className="saved-tools"><label className="saved-search"><Search size={16} /><span className="sr-only">{locale === 'de' ? 'Routen suchen' : 'Search routes'}</span><input value={savedSearch} onChange={(event) => setSavedSearch(event.target.value)} placeholder={locale === 'de' ? 'Routen suchen' : 'Search routes'} /></label><select value={savedSort} onChange={(event) => setSavedSort(event.target.value as typeof savedSort)} aria-label={locale === 'de' ? 'Routen sortieren' : 'Sort routes'}><option value="updated">{locale === 'de' ? 'Zuletzt geändert' : 'Last edited'}</option><option value="name">{locale === 'de' ? 'Name' : 'Name'}</option><option value="distance">{locale === 'de' ? 'Distanz' : 'Distance'}</option></select></div>}
       {savedRoutes.length === 0 ? <div className="empty-state"><Bookmark size={28} /><h3>{locale === 'de' ? 'Noch keine Routen' : 'No routes yet'}</h3><p>{locale === 'de' ? 'Gespeicherte Routen erscheinen hier und als dezente Ebene auf der Karte.' : 'Saved routes appear here and as a subtle layer on the map.'}</p></div> : visibleSavedRoutes.length === 0 ? <div className="empty-state"><Search size={28} /><h3>{locale === 'de' ? 'Nichts gefunden' : 'Nothing found'}</h3></div> : <div className="saved-list">{visibleSavedRoutes.map((saved) => <article key={saved.id}>
           <button className="saved-main" onClick={() => openSavedRoute(saved)}><span className="saved-route-icon"><RouteIcon /></span><span><strong>{saved.name}</strong><small>{saved.metrics.distanceKm} km · {formatDuration(saved.metrics.durationMinutes)}</small></span><ChevronDown className="saved-chevron" /></button>
         <div className="saved-actions">
-          <button className={saved.favorite ? 'is-favorite' : ''} onClick={() => persistSaved(savedRoutes.map((item) => item.id === saved.id ? { ...item, favorite: !item.favorite } : item))} aria-label={locale === 'de' ? 'Favorit umschalten' : 'Toggle favorite'}><Star size={15} fill={saved.favorite ? 'currentColor' : 'none'} /></button>
-          <button onClick={() => persistSaved([{ ...saved, id: crypto.randomUUID(), name: `${saved.name} ${locale === 'de' ? 'Kopie' : 'copy'}`, createdAt: new Date().toISOString(), favorite: false }, ...savedRoutes].slice(0, 50))} aria-label={locale === 'de' ? 'Route duplizieren' : 'Duplicate route'}><Copy size={15} /></button>
-          <button className={pendingDelete === saved.id ? 'is-delete-confirm' : ''} onClick={() => { if (pendingDelete === saved.id) { persistSaved(savedRoutes.filter((item) => item.id !== saved.id)); setPendingDelete(null) } else setPendingDelete(saved.id) }} aria-label={pendingDelete === saved.id ? (locale === 'de' ? 'Löschen bestätigen' : 'Confirm delete') : (locale === 'de' ? 'Route löschen' : 'Delete route')}><Trash2 size={15} /></button>
+          <button className={saved.favorite ? 'is-favorite' : ''} onClick={() => void toggleFavorite(saved)} aria-label={locale === 'de' ? 'Favorit umschalten' : 'Toggle favorite'}><Star size={15} fill={saved.favorite ? 'currentColor' : 'none'} /></button>
+          <button onClick={() => void showVersions(saved.id)} aria-expanded={historyRouteId === saved.id} aria-label={locale === 'de' ? 'Versionsverlauf' : 'Version history'}><History size={15} /></button>
+          <button onClick={() => void duplicateRoute(saved)} aria-label={locale === 'de' ? 'Route duplizieren' : 'Duplicate route'}><Copy size={15} /></button>
+          <button className={pendingDelete === saved.id ? 'is-delete-confirm' : ''} onClick={() => { if (pendingDelete === saved.id) void deleteRoute(saved.id); else setPendingDelete(saved.id) }} aria-label={pendingDelete === saved.id ? (locale === 'de' ? 'Löschen bestätigen' : 'Confirm delete') : (locale === 'de' ? 'Route löschen' : 'Delete route')}><Trash2 size={15} /></button>
         </div>
+        {historyRouteId === saved.id ? <div className="version-history">{historyLoading ? <span>{locale === 'de' ? 'Versionen werden geladen …' : 'Loading versions …'}</span> : routeVersions.length ? routeVersions.map((version) => <button key={version.version} onClick={() => void restoreVersion(version)}><span><b>v{version.version}</b>{new Date(version.savedAt).toLocaleString(locale === 'de' ? 'de-CH' : 'en-GB')}</span><RotateCcw size={14} /><span className="sr-only">{locale === 'de' ? 'wiederherstellen' : 'restore'}</span></button>) : <span>{locale === 'de' ? 'Noch keine Serverversionen.' : 'No server versions yet.'}</span>}</div> : null}
       </article>)}</div>}
     </aside></div>}
     {showGuide && <Onboarding onClose={closeGuide} locale={locale} />}
