@@ -1,5 +1,5 @@
 import { Pool, type PoolClient } from 'pg'
-import type { PlannedRoute, RouteVersion } from './domain'
+import type { HomePoint, PlannedRoute, RouteVersion } from './domain'
 import type { RouteOwner } from './anonymous-owner'
 
 declare global { var velvetiaRoutePool: Pool | undefined; var velvetiaSchemaReady: Promise<void> | undefined }
@@ -40,6 +40,17 @@ export async function ensureRouteSchema() {
       geometry geometry(LineString, 4326) NOT NULL,
       created_at timestamptz NOT NULL DEFAULT now(),
       PRIMARY KEY (route_id, version)
+    );
+    CREATE TABLE IF NOT EXISTS app.user_preferences (
+      user_id uuid PRIMARY KEY,
+      home_label varchar(200),
+      home_longitude double precision,
+      home_latitude double precision,
+      updated_at timestamptz NOT NULL DEFAULT now(),
+      CONSTRAINT user_preferences_home_complete CHECK (
+        (home_label IS NULL AND home_longitude IS NULL AND home_latitude IS NULL)
+        OR (home_label IS NOT NULL AND home_longitude IS NOT NULL AND home_latitude IS NOT NULL)
+      )
     );
   `).then(() => undefined).catch((error) => { globalThis.velvetiaSchemaReady = undefined; throw error })
   return globalThis.velvetiaSchemaReady
@@ -102,4 +113,30 @@ export async function listRouteVersions(owner: RouteOwner, id: string): Promise<
     ? await database.query<{ version: number; created_at: Date; route_data: PlannedRoute }>('SELECT v.version, v.created_at, v.route_data FROM app.route_versions v JOIN app.routes r ON r.id = v.route_id WHERE v.route_id = $1 AND r.user_id = $2 AND r.deleted_at IS NULL ORDER BY v.version DESC LIMIT 30', [id, owner.userId])
     : await database.query<{ version: number; created_at: Date; route_data: PlannedRoute }>('SELECT v.version, v.created_at, v.route_data FROM app.route_versions v JOIN app.routes r ON r.id = v.route_id WHERE v.route_id = $1 AND r.owner_key = $2 AND r.user_id IS NULL AND r.deleted_at IS NULL ORDER BY v.version DESC LIMIT 30', [id, owner.ownerKey])
   return result.rows.map((row) => ({ version: row.version, savedAt: row.created_at.toISOString(), route: snapshot(row.route_data, row.version) }))
+}
+
+export async function getHomePoint(userId: string): Promise<HomePoint | null> {
+  await ensureRouteSchema()
+  const result = await pool()!.query<{ home_label: string | null; home_longitude: number | null; home_latitude: number | null }>(
+    'SELECT home_label, home_longitude, home_latitude FROM app.user_preferences WHERE user_id = $1',
+    [userId],
+  )
+  const row = result.rows[0]
+  if (!row?.home_label || row.home_longitude === null || row.home_latitude === null) return null
+  return { label: row.home_label, coordinate: [row.home_longitude, row.home_latitude] }
+}
+
+export async function saveHomePoint(userId: string, home: HomePoint): Promise<HomePoint> {
+  await ensureRouteSchema()
+  await pool()!.query(
+    `INSERT INTO app.user_preferences (user_id, home_label, home_longitude, home_latitude, updated_at)
+     VALUES ($1, $2, $3, $4, now())
+     ON CONFLICT (user_id) DO UPDATE SET
+       home_label = EXCLUDED.home_label,
+       home_longitude = EXCLUDED.home_longitude,
+       home_latitude = EXCLUDED.home_latitude,
+       updated_at = now()`,
+    [userId, home.label, home.coordinate[0], home.coordinate[1]],
+  )
+  return home
 }

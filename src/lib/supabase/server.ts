@@ -28,10 +28,14 @@ export async function createCookieSupabase() {
   })
 }
 
+export function requestBearerToken(request: Request) {
+  return request.headers.get('authorization')?.match(/^Bearer\s+(.+)$/i)?.[1]
+}
+
 export async function authenticatedUserId(request: Request) {
   const supabase = createRequestSupabase(request)
   if (!supabase) return null
-  const { data, error } = await supabase.auth.getClaims()
+  const { data, error } = await supabase.auth.getClaims(requestBearerToken(request))
   if (error || !data?.claims.sub) return null
   return data.claims.sub
 }

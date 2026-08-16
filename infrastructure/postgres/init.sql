@@ -22,3 +22,15 @@ CREATE TABLE IF NOT EXISTS app.route_versions (
   geometry geometry(LineString, 4326) NOT NULL, created_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (route_id, version)
 );
+
+CREATE TABLE IF NOT EXISTS app.user_preferences (
+  user_id uuid PRIMARY KEY,
+  home_label varchar(200),
+  home_longitude double precision,
+  home_latitude double precision,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT user_preferences_home_complete CHECK (
+    (home_label IS NULL AND home_longitude IS NULL AND home_latitude IS NULL)
+    OR (home_label IS NOT NULL AND home_longitude IS NOT NULL AND home_latitude IS NOT NULL)
+  )
+);
