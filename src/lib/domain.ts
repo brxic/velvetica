@@ -4,6 +4,11 @@ export type RouteMode = 'round-trip' | 'one-way'
 
 export type Coordinate = [longitude: number, latitude: number]
 
+export type HomePoint = {
+  label: string
+  coordinate: Coordinate
+}
+
 export type Waypoint = {
   id: string
   coordinate: Coordinate

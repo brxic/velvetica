@@ -85,12 +85,12 @@ Die Project URL und der Publishable Key dürfen im Browser verwendet werden. Der
    ```
 
 5. `[YOUR-PASSWORD]` inklusive eckiger Klammern durch das beim Erstellen des Projekts gewählte Datenbankpasswort ersetzen.
-6. Falls noch keine TLS-Option vorhanden ist, `?sslmode=require` anhängen. Existiert bereits ein `?`, stattdessen `&sslmode=require` anhängen.
+6. Falls noch keine TLS-Option vorhanden ist, `?uselibpqcompat=true&sslmode=require` anhängen. Existiert bereits ein `?`, stattdessen `&uselibpqcompat=true&sslmode=require` anhängen.
 
 Endform:
 
 ```text
-postgresql://postgres.PROJECT_REF:URL_ENCODED_PASSWORD@POOLER_HOST:6543/postgres?sslmode=require
+postgresql://postgres.PROJECT_REF:URL_ENCODED_PASSWORD@POOLER_HOST:6543/postgres?uselibpqcompat=true&sslmode=require
 ```
 
 Enthält das Passwort Zeichen wie `@`, `:`, `/`, `?`, `#` oder `%`, müssen diese im URI URL-kodiert sein. Den fertigen String nicht in Git, Screenshots oder Chatnachrichten einfügen. Bei verlorenem Passwort unter **Project Settings → Database** ein neues Datenbankpasswort setzen.
@@ -102,7 +102,7 @@ Im Projektroot eine Datei `.env.development.local` anlegen. Diese Datei ist giti
 ```dotenv
 NEXT_PUBLIC_SUPABASE_URL=https://PROJECT_REF.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
-DATABASE_URL=postgresql://postgres.PROJECT_REF:URL_ENCODED_PASSWORD@POOLER_HOST:6543/postgres?sslmode=require
+DATABASE_URL=postgresql://postgres.PROJECT_REF:URL_ENCODED_PASSWORD@POOLER_HOST:6543/postgres?uselibpqcompat=true&sslmode=require
 ```
 
 Danach einen eventuell laufenden Dev-Server vollständig beenden und neu starten:
@@ -116,7 +116,7 @@ Kontrolle:
 - `http://localhost:3000/api/health` öffnen.
 - `checks.database.status` muss `up` sein.
 - `checks.database.version` sollte eine PostGIS-Version enthalten.
-- Falls `database` auf `down` steht, zuerst Port `6543`, Passwortkodierung und `sslmode=require` prüfen.
+- Falls `database` auf `down` steht, zuerst Port `6543`, Passwortkodierung und `uselibpqcompat=true&sslmode=require` prüfen. Der Kompatibilitätsparameter verhindert, dass aktuelle `pg`-Versionen `require` unerwartet wie `verify-full` behandeln.
 
 ## 5. E-Mail-Login aktivieren
 

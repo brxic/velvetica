@@ -35,17 +35,34 @@ CREATE TABLE IF NOT EXISTS app.route_versions (
   PRIMARY KEY (route_id, version)
 );
 
+CREATE TABLE IF NOT EXISTS app.user_preferences (
+  user_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  home_label varchar(200),
+  home_longitude double precision,
+  home_latitude double precision,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT user_preferences_home_complete CHECK (
+    (home_label IS NULL AND home_longitude IS NULL AND home_latitude IS NULL)
+    OR (home_label IS NOT NULL AND home_longitude IS NOT NULL AND home_latitude IS NOT NULL)
+  )
+);
+
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'routes_user_id_fkey' AND conrelid = 'app.routes'::regclass) THEN
     ALTER TABLE app.routes
       ADD CONSTRAINT routes_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'user_preferences_user_id_fkey' AND conrelid = 'app.user_preferences'::regclass) THEN
+    ALTER TABLE app.user_preferences
+      ADD CONSTRAINT user_preferences_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+  END IF;
 END
 $$;
 
 ALTER TABLE app.routes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app.route_versions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE app.user_preferences ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS routes_select_own ON app.routes;
 CREATE POLICY routes_select_own ON app.routes
@@ -62,7 +79,12 @@ CREATE POLICY route_versions_select_own ON app.route_versions
       AND app.routes.deleted_at IS NULL
   ));
 
+DROP POLICY IF EXISTS user_preferences_select_own ON app.user_preferences;
+CREATE POLICY user_preferences_select_own ON app.user_preferences
+  FOR SELECT TO authenticated
+  USING (user_id = (SELECT auth.uid()));
+
 REVOKE ALL ON ALL TABLES IN SCHEMA app FROM anon;
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON ALL TABLES IN SCHEMA app FROM authenticated;
 GRANT USAGE ON SCHEMA app TO authenticated;
-GRANT SELECT ON app.routes, app.route_versions TO authenticated;
+GRANT SELECT ON app.routes, app.route_versions, app.user_preferences TO authenticated;

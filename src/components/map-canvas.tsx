@@ -16,11 +16,12 @@ type Props = {
   activeProfileIndex: number | null
   onActiveProfileIndexChange: (index: number | null) => void
   locale: Locale
+  detailExpanded: boolean
 }
 
 const emptyCollection = (): GeoJSON.FeatureCollection => ({ type: 'FeatureCollection', features: [] })
 
-export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onWaypointMove, onRouteShape, activeProfileIndex, onActiveProfileIndexChange, locale }: Props) {
+export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onWaypointMove, onRouteShape, activeProfileIndex, onActiveProfileIndexChange, locale, detailExpanded }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
   const markersRef = useRef<Marker[]>([])
@@ -153,6 +154,15 @@ export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onW
     }
     if (map.getSource('active-route')) update(); else map.once('load', update)
   }, [activeRoute, savedRoutes])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    const resize = () => map.resize()
+    const frame = window.requestAnimationFrame(resize)
+    const timer = window.setTimeout(resize, 280)
+    return () => { window.cancelAnimationFrame(frame); window.clearTimeout(timer) }
+  }, [detailExpanded])
 
   useEffect(() => {
     const map = mapRef.current

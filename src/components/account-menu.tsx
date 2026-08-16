@@ -4,6 +4,7 @@ import type { User } from '@supabase/supabase-js'
 import { Check, Cloud, LockKeyhole, LogIn, LogOut, Mail, UserRound, X } from 'lucide-react'
 import { type FormEvent, useEffect, useState } from 'react'
 import type { Locale } from '@/lib/domain'
+import { announceAuthState } from '@/lib/auth-client'
 import { getBrowserSupabase } from '@/lib/supabase/browser'
 
 type AuthView = 'sign-in' | 'sign-up' | 'forgot-password' | 'update-password'
@@ -25,8 +26,15 @@ export function AccountMenu({ locale }: { locale: Locale }) {
 
   useEffect(() => {
     if (!supabase) return
-    void supabase.auth.getUser().then(({ data }) => setUser(data.user))
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => setUser(session?.user ?? null))
+    let lastUserId: string | null | undefined
+    const updateUser = (nextUser: User | null) => {
+      setUser(nextUser)
+      const nextUserId = nextUser?.id ?? null
+      if (lastUserId !== undefined && nextUserId !== lastUserId) announceAuthState(nextUserId)
+      lastUserId = nextUserId
+    }
+    void supabase.auth.getUser().then(({ data }) => updateUser(data.user))
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => updateUser(session?.user ?? null))
     const result = new URL(window.location.href).searchParams.get('auth')
     if (result) {
       const timer = window.setTimeout(() => {

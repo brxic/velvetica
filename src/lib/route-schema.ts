@@ -3,6 +3,11 @@ import { z } from 'zod'
 const coordinate = z.tuple([z.number().min(-180).max(180), z.number().min(-90).max(90)])
 const waypoint = z.object({ id: z.string().min(1).max(100), coordinate, label: z.string().max(200), kind: z.enum(['start', 'end', 'via', 'shaping', 'generated']) })
 
+export const homePointSchema = z.object({
+  label: z.string().trim().min(1).max(200),
+  coordinate,
+})
+
 export const plannedRouteSchema = z.object({
   id: z.string().uuid(), name: z.string().trim().min(1).max(80), description: z.string().max(300).optional(),
   createdAt: z.string().datetime(), updatedAt: z.string().datetime().optional(), profile: z.enum(['road', 'gravel', 'touring', 'city']), mode: z.enum(['round-trip', 'one-way']),
