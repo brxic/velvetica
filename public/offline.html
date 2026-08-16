@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="de-CH">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="theme-color" content="#1e2025">
+    <title>Velvetia — Offline</title>
+    <style>
+      :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+      * { box-sizing: border-box; }
+      body { min-height: 100vh; margin: 0; padding: 24px; display: grid; place-items: center; background: #f5f5f3; color: #1e2025; }
+      main { width: min(420px, 100%); padding: 28px; border-radius: 22px; background: #fff; box-shadow: 0 20px 60px #1e20251f; text-align: center; }
+      img { width: 88px; height: 88px; }
+      h1 { margin: 16px 0 8px; font-size: 28px; }
+      p { margin: 0 0 22px; color: #696b70; line-height: 1.5; }
+      a { min-height: 44px; padding: 0 18px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; background: #e00112; color: #fff; font-weight: 700; text-decoration: none; }
+      @media (prefers-color-scheme: dark) { body { background: #1e2025; color: #d1d1d6; } main { background: #292b30; } p { color: #b6b7bc; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <img src="/pwa-192.png" alt="Velvetia">
+      <h1>Du bist offline.</h1>
+      <p>Die Karte und neue Routen benötigen eine Internetverbindung. Bereits geöffnete Inhalte bleiben verfügbar.</p>
+      <a href="/">Erneut versuchen</a>
+    </main>
+  </body>
+</html>

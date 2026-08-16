@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import localFont from 'next/font/local'
+import { PwaRegistration } from '@/components/pwa-registration'
 import './globals.css'
 
 const foundry = localFont({
@@ -9,10 +10,25 @@ const foundry = localFont({
   ], variable: '--font-foundry', display: 'swap',
 })
 
-export const metadata: Metadata = { title: 'Velvetia — Plan less. Ride more.', description: 'Intelligente Fahrradrouten für die Schweiz.' }
-export const viewport: Viewport = { width: 'device-width', initialScale: 1, themeColor: '#f5f5f3' }
-
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="de" className={foundry.variable}><body>{children}</body></html>
+export const metadata: Metadata = {
+  title: 'Velvetia — Plan less. Ride more.',
+  description: 'Intelligente Fahrradrouten für die Schweiz.',
+  applicationName: 'Velvetia',
+  icons: { apple: '/apple-touch-icon.png' },
+  appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'Velvetia' },
+  formatDetection: { telephone: false },
+  other: { 'mobile-web-app-capable': 'yes' },
+}
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  colorScheme: 'light dark',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#f5f5f3' },
+    { media: '(prefers-color-scheme: dark)', color: '#1e2025' },
+  ],
 }
 
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  return <html lang="de-CH" className={foundry.variable}><body>{children}<PwaRegistration /></body></html>
+}
