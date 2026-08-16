@@ -59,7 +59,7 @@ export async function checkDatabase(): Promise<HealthCheck> {
   const connectionString = process.env.DATABASE_URL
   if (!connectionString) return { status: 'disabled', latencyMs: elapsed(startedAt) }
 
-  const pool = new Pool({ connectionString, connectionTimeoutMillis: TIMEOUT_MS, max: 1 })
+  const pool = new Pool({ connectionString, options: '-c search_path=public,extensions', connectionTimeoutMillis: TIMEOUT_MS, max: 1 })
   try {
     const result = await pool.query<{ version: string }>('SELECT PostGIS_Version() AS version')
     return { status: 'up', latencyMs: elapsed(startedAt), version: result.rows[0]?.version }

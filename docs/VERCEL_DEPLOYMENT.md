@@ -46,7 +46,7 @@ Für das Testdeployment nicht die lokalen Adressen `localhost:8002`, `localhost:
 
 Ohne `DATABASE_URL` bleiben gespeicherte Routen sicher im `localStorage` des Browsers. Mit einer TLS-gesicherten, PostGIS-fähigen `DATABASE_URL` aktiviert Velvetia automatisch die serverseitige Synchronisierung und Versionshistorie. Das Schema wird beim ersten Zugriff idempotent eingerichtet. Der Drawer zeigt sichtbar entweder `PostGIS verbunden` oder `Lokaler Speicher`.
 
-Die momentane Besitztrennung verwendet eine anonyme HttpOnly-Browser-ID. Geräteübergreifender Zugriff folgt erst mit dem Authentifizierungspaket. `REDIS_URL` bleibt für das Testdeployment optional.
+Ohne Supabase verwendet die Besitztrennung eine anonyme HttpOnly-Browser-ID. Mit Supabase Auth werden bestehende anonyme Routen beim ersten Login automatisch übernommen und danach geräteübergreifend dem verifizierten Benutzerkonto zugeordnet. Die vollständige Einrichtung inklusive PostGIS-Migration, RLS, E-Mail-/Passwort-Templates und Vercel-Variablen steht in [SUPABASE_SETUP.md](./SUPABASE_SETUP.md). `REDIS_URL` bleibt für das Testdeployment optional.
 
 ## CLI-Alternative
 

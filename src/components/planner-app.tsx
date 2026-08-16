@@ -17,8 +17,10 @@ import { ElevationProfile } from './elevation-profile'
 import { PlaceSearch } from './place-search'
 import { initialWaypointHistory, waypointHistoryReducer } from '@/lib/waypoint-history'
 import { RouteProvenance } from './route-provenance'
+import { AccountMenu } from './account-menu'
 
-const STORAGE_KEY = 'velvetia.saved-routes.v1'
+const LEGACY_STORAGE_KEY = 'velvetia.saved-routes.v1'
+const STORAGE_KEY_PREFIX = 'velvetia.saved-routes.v2'
 const GUIDE_KEY = 'velvetia.guide-seen.v1'
 const THEME_KEY = 'velvetia.theme.v1'
 
@@ -27,6 +29,8 @@ const profiles: Array<{ id: BikeProfile; icon: typeof Bike }> = [
 ]
 
 function formatDuration(minutes: number) { const h = Math.floor(minutes / 60); const m = minutes % 60; return `${h} h ${String(m).padStart(2, '0')} min` }
+function readStoredRoutes(key: string): PlannedRoute[] { try { return JSON.parse(localStorage.getItem(key) ?? '[]') as PlannedRoute[] } catch { return [] } }
+function writeStoredRoutes(key: string, routes: PlannedRoute[]) { try { localStorage.setItem(key, JSON.stringify(routes)) } catch { /* localStorage may be unavailable or full */ } }
 function routeSignature(route: PlannedRoute) { return JSON.stringify({ name: route.name.trim(), description: route.description ?? '', profile: route.profile, mode: route.mode, geometry: route.geometry, waypoints: route.waypoints.filter((point) => point.kind !== 'generated'), metrics: route.metrics }) }
 function mergeSavedRoutes(local: PlannedRoute[], remote: PlannedRoute[]) {
   const routes = new Map<string, PlannedRoute>()
@@ -71,16 +75,23 @@ export function PlannerApp() {
   const [historyRouteId, setHistoryRouteId] = useState<string | null>(null)
   const [routeVersions, setRouteVersions] = useState<RouteVersion[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
+  const storageKeyRef = useRef(LEGACY_STORAGE_KEY)
 
   useEffect(() => {
     const hydration = window.setTimeout(() => {
       let local: PlannedRoute[] = []
-      try { local = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]'); setSavedRoutes(local); setShowGuide(!localStorage.getItem(GUIDE_KEY)); setTheme(localStorage.getItem(THEME_KEY) === 'dark' ? 'dark' : 'light') } catch { setSavedRoutes([]) }
+      try { local = readStoredRoutes(LEGACY_STORAGE_KEY); setSavedRoutes(local); setShowGuide(!localStorage.getItem(GUIDE_KEY)); setTheme(localStorage.getItem(THEME_KEY) === 'dark' ? 'dark' : 'light') } catch { setSavedRoutes([]) }
       void (async () => {
         try {
           const response = await fetch('/api/saved-routes')
           if (!response.ok) throw new Error('LOCAL_ONLY')
-          const remote = (await response.json() as { routes: PlannedRoute[] }).routes
+          const payload = await response.json() as { routes: PlannedRoute[]; storageScope: string }
+          const remote = payload.routes
+          const scopedKey = `${STORAGE_KEY_PREFIX}.${payload.storageScope}`
+          const scopedLocal = readStoredRoutes(scopedKey)
+          local = mergeSavedRoutes(scopedLocal, local)
+          storageKeyRef.current = scopedKey
+          localStorage.removeItem(LEGACY_STORAGE_KEY)
           const remoteById = new Map(remote.map((item) => [item.id, item]))
           const pending = local.filter((item) => {
             const serverRoute = remoteById.get(item.id)
@@ -91,7 +102,7 @@ export function PlannerApp() {
             return saved.ok ? (await saved.json() as { route: PlannedRoute }).route : item
           }))
           const merged = mergeSavedRoutes(remote, migrated)
-          setSavedRoutes(merged); localStorage.setItem(STORAGE_KEY, JSON.stringify(merged)); setPersistenceState('server')
+          setSavedRoutes(merged); writeStoredRoutes(scopedKey, merged); setPersistenceState('server')
         } catch { setPersistenceState('local') }
       })()
     }, 0)
@@ -142,7 +153,7 @@ export function PlannerApp() {
     dispatchWaypoints({ type: 'commit', waypoints: next }); void requestRoute(next, true)
   }
 
-  function persistSaved(next: PlannedRoute[]) { setSavedRoutes(next); localStorage.setItem(STORAGE_KEY, JSON.stringify(next)) }
+  function persistSaved(next: PlannedRoute[]) { setSavedRoutes(next); writeStoredRoutes(storageKeyRef.current, next) }
 
   async function syncSavedRoute(saved: PlannedRoute) {
     try {
@@ -277,6 +288,7 @@ export function PlannerApp() {
         <button className="nav-button" onClick={() => setShowSaved(true)}><Bookmark size={18} /> {copy.saved}<span className="count">{savedRoutes.length}</span></button>
       </nav>
       <div className="topbar-actions">
+        <AccountMenu locale={locale} />
         <button className="icon-button mobile-saved-button" onClick={() => setShowSaved(true)} aria-label={copy.saved}><Bookmark size={18} /><span className="count">{savedRoutes.length}</span></button>
         <button className="icon-button labelled" onClick={() => setShowGuide(true)}><CircleHelp size={19} /><span>{copy.guide}</span></button>
         <button className="icon-button" onClick={toggleTheme} aria-label={theme === 'light' ? (locale === 'de' ? 'Dunkles Design' : 'Dark theme') : (locale === 'de' ? 'Helles Design' : 'Light theme')}>{theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}</button>
