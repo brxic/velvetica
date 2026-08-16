@@ -32,6 +32,7 @@ data/
 .cache/
 .turbo/
 .eslintcache
+.codex-remote-attachments/
 
 # Editors and operating systems
 .idea/

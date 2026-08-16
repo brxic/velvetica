@@ -24,7 +24,7 @@ Velvetia ist eine moderne, leicht verständliche Webanwendung zur Planung indivi
 - deterministische Rundtour-Kandidaten mit Ausreisser-, Überlappungs- und Distanz-Cleanup
 - direktes Ziehen oder Antippen der Route mit persistenten Shaping-Punkten
 - lokale Routenverwaltung mit automatischen Namen, Beschreibung, Änderungsstatus, Suche, Sortierung, Favoriten, Kopien und bestätigtem Löschen
-- local-first PostGIS-Synchronisierung mit anonymer Besitztrennung und wiederherstellbarer Versionshistorie
+- local-first PostGIS-Synchronisierung mit anonymer Besitztrennung, optionalem Supabase-Konto und wiederherstellbarer Versionshistorie
 - GPX 1.1 mit Wegpunkten und Höhenwerten
 - persistenter Light/Dark-Modus mit allen vier unveränderten Velvetia-Logoassets
 
@@ -100,3 +100,5 @@ Die vollständige lokale Routing- und Datenumgebung ist in [docs/LOCAL_INFRASTRU
 Das Repository ist für einen Vercel-Import über GitHub vorbereitet. Ohne zusätzliche Environment Variables verwendet es den fair-use FOSSGIS-OSM-Fahrradrouter und die offizielle swisstopo-Höhenprofil-API; lokale Docker-Dienste werden nicht vorausgesetzt oder hochgeladen. Für grössere Nutzung wird Valhalla separat gehostet.
 
 Die vollständige Anleitung und die spätere Umschaltung auf eine externe Valhalla-Instanz stehen in [docs/VERCEL_DEPLOYMENT.md](./docs/VERCEL_DEPLOYMENT.md).
+
+Supabase Auth, PostGIS, Row Level Security und die drei erforderlichen Deployment-Variablen werden in [docs/SUPABASE_SETUP.md](./docs/SUPABASE_SETUP.md) eingerichtet.
