@@ -4,7 +4,7 @@ import { FossgisBikeProvider, wgs84ToLv95 } from './fossgis'
 
 const request: PlanningRequest = { locale: 'de', profile: 'road', mode: 'one-way', targetDistanceKm: 10, waypoints: [{ id: 'a', coordinate: [7.4474, 46.948], label: 'Bern', kind: 'start' }, { id: 'b', coordinate: [7.46, 46.96], label: 'Ziel', kind: 'end' }], preferences: { surface: 'balanced', climbing: 'balanced', safety: 'quiet' } }
 
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers() })
 
 describe('FOSSGIS bicycle routing', () => {
   it('converts WGS84 coordinates to plausible Swiss LV95 values', () => {
@@ -26,5 +26,19 @@ describe('FOSSGIS bicycle routing', () => {
     expect(route.provenance.routingEngine).toBe('FOSSGIS OSRM Bike')
     expect(fetchMock.mock.calls[0][0]).toContain('/routed-bike/route/v1/driving/')
     expect(fetchMock.mock.calls[1][0]).toBe('https://api3.geo.admin.ch/rest/services/profile.json')
+  })
+
+  it('replaces an excursion with a better complete road-following loop', async () => {
+    vi.useFakeTimers()
+    const start = request.waypoints[0].coordinate
+    const excursion = [start, [8.35, 47.25], start, [8.35, 47.25], start]
+    const compact = [start, [7.65, 47.02], [7.63, 46.82], [7.35, 46.8], start]
+    const response = (coordinates: number[][], distance: number) => Response.json({ code: 'Ok', routes: [{ distance, duration: 6000, geometry: { type: 'LineString', coordinates } }] })
+    const fetchMock = vi.fn().mockResolvedValueOnce(response(excursion, 60_000)).mockResolvedValueOnce(response(compact, 61_000)).mockResolvedValueOnce(Response.json([{ alts: { COMB: 500 } }, { alts: { COMB: 510 } }]))
+    vi.stubGlobal('fetch', fetchMock)
+    const planned = new FossgisBikeProvider().plan({ ...request, mode: 'round-trip', targetDistanceKm: 60, waypoints: [request.waypoints[0]] })
+    await vi.runAllTimersAsync()
+    expect((await planned).geometry.coordinates).toEqual(compact)
+    expect(fetchMock).toHaveBeenCalledTimes(3)
   })
 })

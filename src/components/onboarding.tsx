@@ -3,6 +3,7 @@
 import { ChevronLeft, ChevronRight, MapPin, MousePointer2, Route, X } from 'lucide-react'
 import { useState } from 'react'
 import type { Locale } from '@/lib/domain'
+import { useDialogFocus } from './dialog-focus'
 
 const guides = {
   de: [
@@ -19,8 +20,9 @@ const guides = {
 
 export function Onboarding({ onClose, locale }: { onClose: () => void; locale: Locale }) {
   const [step, setStep] = useState(0); const steps = guides[locale]; const current = steps[step]; const Icon = current.icon
+  const ref = useDialogFocus(true, onClose)
   return <div className="onboarding-backdrop" role="presentation">
-    <section className="onboarding" role="dialog" aria-modal="true" aria-labelledby="guide-title">
+    <section ref={ref} className="onboarding" role="dialog" aria-modal="true" aria-labelledby="guide-title">
       <button className="icon-button onboarding-close" onClick={onClose} aria-label={locale === 'de' ? 'Anleitung schließen' : 'Close guide'}><X size={20} /></button>
       <div className="onboarding-icon"><Icon size={28} /></div>
       <p className="eyebrow">{locale === 'de' ? `Schritt ${step + 1} von ${steps.length}` : `Step ${step + 1} of ${steps.length}`}</p>

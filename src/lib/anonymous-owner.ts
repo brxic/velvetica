@@ -25,6 +25,7 @@ export async function routeOwner(request: Request): Promise<RouteOwner> {
 }
 
 export function withAnonymousOwner(response: Response, ownerKey: string, setCookie: boolean, secure: boolean) {
+  response.headers.set('Cache-Control', 'private, no-store')
   if (setCookie) response.headers.append('Set-Cookie', `${COOKIE_NAME}=${ownerKey}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000${secure ? '; Secure' : ''}`)
   return response
 }

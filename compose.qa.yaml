@@ -1,0 +1,17 @@
+name: velvetia-qa
+services:
+  database:
+    image: postgis/postgis:17-3.5
+    environment:
+      POSTGRES_USER: velvetia_test
+      POSTGRES_PASSWORD: test-only-not-for-production
+      POSTGRES_DB: velvetia_test
+    ports:
+      - "127.0.0.1:54328:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U velvetia_test -d velvetia_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 30

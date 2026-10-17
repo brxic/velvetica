@@ -19,7 +19,8 @@ coverage/
 
 # Local services and geodata
 .data/
-data/
+/data/
+supabase/.temp/
 *.osm.pbf
 *.mbtiles
 *.pmtiles
@@ -47,6 +48,7 @@ Desktop.ini
 playwright-report/
 test-results/
 blob-report/
+public/maplibre/
 
 # Local object storage and databases
 minio-data/

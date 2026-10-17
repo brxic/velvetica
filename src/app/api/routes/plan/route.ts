@@ -5,7 +5,7 @@ export const runtime = 'nodejs'
 export const maxDuration = 60
 
 const coordinate = z.tuple([z.number().min(-180).max(180), z.number().min(-90).max(90)])
-const waypoint = z.object({ id: z.string(), coordinate, label: z.string(), kind: z.enum(['start', 'end', 'via', 'shaping', 'generated']) })
+const waypoint = z.object({ id: z.string().min(1).max(100), coordinate, label: z.string().max(200), kind: z.enum(['start', 'end', 'via', 'shaping', 'generated']) })
 const requestSchema = z.object({
   locale: z.enum(['de', 'en']),
   profile: z.enum(['road', 'gravel', 'touring', 'city']),
@@ -17,7 +17,7 @@ const requestSchema = z.object({
     climbing: z.enum(['avoid', 'balanced', 'challenge']),
     safety: z.enum(['quiet', 'balanced', 'direct']),
   }),
-})
+}).refine((request) => request.waypoints.some((point) => point.kind === 'start') && (request.mode === 'round-trip' || request.waypoints.some((point) => point.kind === 'end')), { message: 'Start and destination are required' })
 
 export async function POST(request: Request) {
   const parsed = requestSchema.safeParse(await request.json().catch(() => null))

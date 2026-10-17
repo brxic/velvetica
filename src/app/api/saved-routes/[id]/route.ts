@@ -1,6 +1,7 @@
 import { routeOwner, withAnonymousOwner } from '@/lib/anonymous-owner'
 import { plannedRouteSchema } from '@/lib/route-schema'
 import { deleteSavedRoute, persistenceEnabled, saveSavedRoute } from '@/lib/saved-route-store'
+import { RouteConflictError } from '@/lib/account-preferences'
 
 export const runtime = 'nodejs'
 
@@ -11,6 +12,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   const owner = await routeOwner(request)
   try { return withAnonymousOwner(Response.json({ route: await saveSavedRoute(owner, parsed.data), authenticated: Boolean(owner.userId), storageScope: owner.storageScope }), owner.ownerKey, owner.setCookie, owner.secure) }
   catch (error) {
+    if (error instanceof RouteConflictError) return Response.json({ code: 'VERSION_CONFLICT' }, { status: 409 })
     console.error('[saved-routes] save failed', { error: error instanceof Error ? error.message : String(error), authenticated: Boolean(owner.userId) })
     return Response.json({ code: 'PERSISTENCE_FAILED' }, { status: 503 })
   }

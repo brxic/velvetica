@@ -1,6 +1,6 @@
 import { routeOwner } from '@/lib/anonymous-owner'
 import { homePointSchema } from '@/lib/route-schema'
-import { getHomePoint, persistenceEnabled, saveHomePoint } from '@/lib/saved-route-store'
+import { getHomePoint, persistenceEnabled, saveHomePoint, removeHomePoint } from '@/lib/saved-route-store'
 
 export const runtime = 'nodejs'
 
@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   const owner = await routeOwner(request)
   if (!owner.userId) return unauthorized()
   try {
-    return Response.json({ home: await getHomePoint(owner.userId), authenticated: true })
+    return Response.json({ home: await getHomePoint(owner.userId), authenticated: true }, { headers: { 'Cache-Control': 'private, no-store' } })
   } catch (error) {
     console.error('[account/home] read failed', { error: error instanceof Error ? error.message : String(error) })
     return Response.json({ code: 'PERSISTENCE_FAILED' }, { status: 503 })
@@ -36,4 +36,12 @@ export async function PUT(request: Request) {
     console.error('[account/home] save failed', { error: error instanceof Error ? error.message : String(error) })
     return Response.json({ code: 'PERSISTENCE_FAILED' }, { status: 503 })
   }
+}
+
+export async function DELETE(request: Request) {
+  if (!persistenceEnabled()) return unavailable()
+  const owner = await routeOwner(request)
+  if (!owner.userId) return unauthorized()
+  try { await removeHomePoint(owner.userId); return Response.json({ home: null }) }
+  catch { return Response.json({ code: 'PERSISTENCE_FAILED' }, { status: 503 }) }
 }

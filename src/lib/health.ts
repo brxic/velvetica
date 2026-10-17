@@ -33,7 +33,13 @@ export async function checkRouting(): Promise<HealthCheck> {
   const startedAt = performance.now()
 
   if (process.env.ROUTING_PROVIDER === 'fossgis') {
-    return { status: 'up', latencyMs: elapsed(startedAt), version: 'FOSSGIS public OSM bike' }
+    try {
+      const base = (process.env.FOSSGIS_URL ?? 'https://routing.openstreetmap.de/routed-bike').replace(/\/$/, '')
+      const response = await fetch(`${base}/nearest/v1/driving/7.5886,47.5596?number=1`, { next: { revalidate: 60 }, signal: AbortSignal.timeout(TIMEOUT_MS) })
+      if (!response.ok) return unavailable(startedAt)
+      const data = await response.json() as { code?: string; waypoints?: unknown[] }
+      return data.code === 'Ok' && data.waypoints?.length ? { status: 'up', latencyMs: elapsed(startedAt), version: 'FOSSGIS public OSM bike' } : unavailable(startedAt)
+    } catch { return unavailable(startedAt) }
   }
 
   if (process.env.ROUTING_PROVIDER !== 'valhalla') {
