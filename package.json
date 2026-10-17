@@ -6,8 +6,8 @@
     "node": ">=24 <25"
   },
   "scripts": {
-    "predev": "node scripts/prepare-map-assets.mjs",
-    "prebuild": "node scripts/prepare-map-assets.mjs",
+    "predev": "node scripts/prepare-map-assets.mjs && node scripts/prepare-pwa.mjs",
+    "prebuild": "node scripts/prepare-map-assets.mjs && node scripts/prepare-pwa.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -15,6 +15,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "test:pwa": "node scripts/pwa-qa.mjs",
     "test:database": "node scripts/database-qa.mjs",
     "test:integration": "node scripts/run-database-qa.mjs"
   },

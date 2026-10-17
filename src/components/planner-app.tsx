@@ -27,6 +27,7 @@ import { AppDialog } from './ui/dialog'
 import { plannedRouteSchema } from '@/lib/route-schema'
 import { RouteThumbnail } from './route-thumbnail'
 import { acknowledgeSavedDraft, routeSignature, type RouteSyncState } from '@/lib/route-draft'
+import { PWA_UPDATE_CHECK } from '@/lib/pwa'
 
 const LEGACY_STORAGE_KEY = 'velvetia.saved-routes.v1'
 const STORAGE_KEY_PREFIX = 'velvetia.saved-routes.v2'
@@ -273,7 +274,7 @@ export function PlannerApp() {
     }
     if (serverSaved) setNotice(asCopy ? (locale === 'de' ? 'Als neue Route gespeichert.' : 'Saved as a new route.') : (locale === 'de' ? `Route gespeichert · Version ${serverSaved.serverVersion}` : `Route saved · version ${serverSaved.serverVersion}`))
     else if (!locallySecured) { setRouteSync(saved.id, 'error'); setNotice(locale === 'de' ? 'Speichern fehlgeschlagen: Weder lokaler Speicher noch Cloud sind verfügbar. Lass diese Route geöffnet und exportiere sie als GPX.' : 'Save failed: neither local storage nor cloud is available. Keep this route open and export it as GPX.') }
-    else setNotice((current) => current ?? (locale === 'de' ? 'Nur auf diesem Gerät gespeichert. Cloud-Synchronisierung ausstehend. Erneut speichern, sobald du online bist.' : 'Saved only on this device. Cloud sync pending. Save again when online.'))
+    else setNotice((current) => current ?? (!navigator.onLine ? (locale === 'de' ? 'Lokal gespeichert · Cloud-Abgleich ausstehend.' : 'Saved locally · cloud sync pending.') : (locale === 'de' ? 'Nur auf diesem Gerät gespeichert. Cloud-Synchronisierung ausstehend. Erneut speichern, sobald du online bist.' : 'Saved only on this device. Cloud sync pending. Save again when online.')))
     saveInFlightRef.current = false
     setSaving(false)
   }
@@ -390,6 +391,13 @@ export function PlannerApp() {
   const persistedRoute = route ? savedRoutes.find((saved) => saved.id === route.id) : undefined
   const currentSyncState = route ? routeSyncStates[route.id] ?? 'local' : 'local'
   const hasUnsavedChanges = Boolean(route && (currentSyncState === 'error' || !persistedRoute || routeSignature(route) !== routeSignature(persistedRoute)))
+  useEffect(() => {
+    const protectUpdate = (event: Event) => {
+      if (hasUnsavedChanges || saving || isPlanning || homePending || (!route && waypoints.length > 0)) event.preventDefault()
+    }
+    window.addEventListener(PWA_UPDATE_CHECK, protectUpdate)
+    return () => window.removeEventListener(PWA_UPDATE_CHECK, protectUpdate)
+  }, [hasUnsavedChanges, saving, isPlanning, homePending, route, waypoints.length])
   const saveStatus = currentSyncState === 'error' ? (locale === 'de' ? 'Nicht gesichert' : 'Not saved') : currentSyncState === 'conflict' ? (locale === 'de' ? 'Konflikt · lokal' : 'Conflict · local') : currentSyncState === 'syncing' ? (locale === 'de' ? 'Synchronisiert …' : 'Syncing …') : hasUnsavedChanges ? (locale === 'de' ? 'Ungespeichert' : 'Unsaved') : currentSyncState === 'synced' ? (locale === 'de' ? 'Cloud synchronisiert' : 'Cloud synced') : (locale === 'de' ? 'Lokal · Cloud ausstehend' : 'Local · cloud pending')
   async function confirmDiscard() {
     return !(hasUnsavedChanges || saving) || askConfirmation(locale === 'de' ? 'Ungesicherte Änderungen oder ein laufender Speichervorgang sind vorhanden. Diesen Entwurf wirklich verlassen?' : 'There are unsaved changes or a save in progress. Really leave this draft?')

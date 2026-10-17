@@ -49,6 +49,7 @@ playwright-report/
 test-results/
 blob-report/
 public/maplibre/
+public/pwa-build.js
 
 # Local object storage and databases
 minio-data/

@@ -107,6 +107,8 @@ Supabase Auth, PostGIS, Row Level Security und die drei erforderlichen Deploymen
 
 Design-Tokens, gemeinsame UI-Primitives und die responsiven Karten-/Panel-Zustände sind in [docs/FRONTEND_SYSTEM.md](./docs/FRONTEND_SYSTEM.md) dokumentiert.
 
+PWA-Updates, Offline-Grenzen und der echte Produktions-Service-Worker-Test (`npm run test:pwa`) stehen in [docs/PWA_RELIABILITY.md](./docs/PWA_RELIABILITY.md).
+
 Konten unterstützen Planungsstandards, die Verwaltung des Home-Punkts, Datenexport und bestätigte Kontolöschung. Die Routenbibliothek bietet Filter, wiederherstellbare Versionen, Konflikterkennung bei Änderungen auf mehreren Geräten und widerrufbare Freigabelinks. Die App-Oberfläche wurde für Desktop und Mobile überarbeitet.
 
 Implementierung, Datenbankmigration, Testbefehle und die Grenzen der jeweiligen Prüfungen sind in [docs/BETA_WORKSPACE.md](./docs/BETA_WORKSPACE.md) beschrieben. Browserprüfungen starten mit `npm run test:e2e`; isolierte PostGIS- und Backup/Restore-Prüfungen mit `npm run test:integration` bei laufender Docker-Engine.
