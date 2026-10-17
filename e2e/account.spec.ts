@@ -49,7 +49,7 @@ test('email/password login → preferences → home → logout → login again',
   await expect(page.getByText('Standards gespeichert. Sie gelten für deine nächste Planung.')).toBeVisible()
   await page.getByRole('button', { name: 'Zuhause entfernen' }).click()
   await expect(page.getByText('Zuhause entfernt.', { exact: false })).toBeVisible()
-  await page.getByRole('button', { name: 'Abmelden', exact: true }).click()
+  await Promise.all([page.waitForEvent('load'), page.getByRole('button', { name: 'Abmelden', exact: true }).click()])
   await page.getByRole('button', { name: 'Anmelden', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Willkommen zurück' })).toBeVisible()
   await page.getByLabel('E-Mail-Adresse').fill(user.email)

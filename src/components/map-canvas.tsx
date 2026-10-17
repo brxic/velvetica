@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import * as maplibregl from 'maplibre-gl'
 import type { GeoJSONSource, Map as MapLibreMap, MapMouseEvent, Marker } from 'maplibre-gl'
 import type { Coordinate, Locale, PlannedRoute, Waypoint } from '@/lib/domain'
@@ -34,6 +34,13 @@ export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onW
   const activeRouteRef = useRef(activeRoute)
   const waypointsRef = useRef(waypoints)
   const profileHandlerRef = useRef(onActiveProfileIndexChange)
+  const geometry = activeRoute?.geometry, metrics = activeRoute?.metrics, provenance = activeRoute?.provenance
+  const analysis = useMemo(() => {
+    const result = geometry && metrics && provenance ? analyzeRoute({ geometry, metrics, provenance }) : { samples: [], climbs: [] }
+    return { ...result, coordinates: result.samples.map((sample) => sample.coordinate) }
+  }, [geometry, metrics, provenance])
+  const analysisRef = useRef(analysis)
+  useEffect(() => { analysisRef.current = analysis }, [analysis])
 
   useEffect(() => { clickHandlerRef.current = onMapClick }, [onMapClick])
   useEffect(() => { moveHandlerRef.current = onWaypointMove }, [onWaypointMove])
@@ -110,10 +117,9 @@ export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onW
       map.on('mousemove', 'active-route-line', (event) => {
         const route = activeRouteRef.current
         if (route) {
-          const coordinates = route.geometry.coordinates as Coordinate[]
-          const coordinateIndex = nearestCoordinateIndex(coordinates, event.lngLat.lng, event.lngLat.lat)
-          const profileLength = route.metrics.elevationProfile.length
-          profileHandlerRef.current(Math.round(coordinateIndex / Math.max(1, coordinates.length - 1) * Math.max(0, profileLength - 1)))
+          const samples = analysisRef.current.samples
+          const sampleIndex = nearestCoordinateIndex(analysisRef.current.coordinates, event.lngLat.lng, event.lngLat.lat)
+          profileHandlerRef.current(samples.length > 1 ? sampleIndex : null)
         }
       })
       map.on('mouseleave', 'active-route-line', () => { if (!dragMarker) map.getCanvas().style.cursor = ''; profileHandlerRef.current(null) })
@@ -141,7 +147,6 @@ export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onW
     const update = () => {
       const activeSource = map.getSource('active-route') as GeoJSONSource | undefined
       if (activeRoute) {
-        const analysis = analyzeRoute(activeRoute)
         activeSource?.setData({ type: 'Feature', properties: {}, geometry: activeRoute.geometry })
         map.setPaintProperty('active-route-line', 'line-gradient', ['interpolate', ['linear'], ['line-progress'], ...gradeGradientStops(analysis)])
       } else activeSource?.setData(emptyCollection())
@@ -161,7 +166,7 @@ export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onW
     }
     if (map.getSource('active-route')) update(); else map.once('load', update)
     return () => { map.off('load', update) }
-  }, [activeRoute, savedRoutes, readOnly])
+  }, [activeRoute, savedRoutes, readOnly, analysis])
 
   useEffect(() => {
     const map = mapRef.current
@@ -177,18 +182,16 @@ export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onW
     if (!map) return
     const update = () => {
       const source = map.getSource('profile-position') as GeoJSONSource | undefined
-      const coordinates = activeRoute?.geometry.coordinates
-      const profileLength = activeRoute?.metrics.elevationProfile.length ?? 0
-      if (!source || activeProfileIndex === null || !coordinates?.length || !profileLength) {
+      const samples = analysis.samples
+      if (!source || activeProfileIndex === null || !samples.length) {
         source?.setData(emptyCollection())
         return
       }
-      const ratio = activeProfileIndex / Math.max(1, profileLength - 1)
-      const coordinate = coordinates[Math.round(ratio * (coordinates.length - 1))]
+      const coordinate = samples[Math.max(0, Math.min(samples.length - 1, activeProfileIndex))].coordinate
       source.setData({ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: coordinate } })
     }
     if (map.getSource('profile-position')) update(); else map.once('load', update)
-  }, [activeProfileIndex, activeRoute])
+  }, [activeProfileIndex, analysis])
 
   useEffect(() => {
     const map = mapRef.current

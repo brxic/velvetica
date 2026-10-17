@@ -2,10 +2,11 @@ import type { Coordinate, PlannedRoute, PlanningRequest } from '@/lib/domain'
 import { createRouteName } from '@/lib/route-name'
 import type { RoutingProvider } from './provider'
 import { createRoundTripSeeds, evaluateRoundTrip } from './round-trip-quality'
+import { cumulativeDistances } from '@/lib/route-analysis'
 
 type OsrmRoute = { distance: number; duration: number; geometry: GeoJSON.LineString }
 type OsrmResponse = { code?: string; routes?: OsrmRoute[]; message?: string }
-type ProfilePoint = { alts?: { COMB?: number; DTM2?: number; DTM25?: number } }
+type ProfilePoint = { dist?: number; alts?: { COMB?: number; DTM2?: number; DTM25?: number } }
 
 let nextRequestAt = 0
 
@@ -28,20 +29,38 @@ async function fetchElevationProfile(coordinates: Coordinate[]) {
   const sampled = coordinates.filter((_, index) => index % stride === 0)
   if (sampled.at(-1) !== coordinates.at(-1)) sampled.push(coordinates.at(-1)!)
   const geometry: GeoJSON.LineString = { type: 'LineString', coordinates: sampled.map(wgs84ToLv95) }
+  const originalDistances = cumulativeDistances(coordinates)
+  const sampledDistances = originalDistances.filter((_, index) => index % stride === 0)
+  if ((coordinates.length - 1) % stride !== 0) sampledDistances.push(originalDistances.at(-1)!)
+  const serviceDistances = [0]
+  for (let index = 1; index < geometry.coordinates.length; index++) serviceDistances.push(serviceDistances[index - 1] + Math.hypot(geometry.coordinates[index][0] - geometry.coordinates[index - 1][0], geometry.coordinates[index][1] - geometry.coordinates[index - 1][1]))
   try {
     const body = new URLSearchParams({ geom: JSON.stringify(geometry), sr: '2056', nb_points: '240', offset: '2', distinct_points: 'True' })
     const response = await fetch('https://api3.geo.admin.ch/rest/services/profile.json', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Velvetia/0.1 (https://github.com/brxic/velvetica)' }, body, signal: AbortSignal.timeout(12_000) })
     if (!response.ok) throw new Error(`SWISSTOPO_PROFILE_${response.status}`)
     const points = await response.json() as ProfilePoint[]
-    const profile = points.map((point) => point.alts?.COMB ?? point.alts?.DTM2 ?? point.alts?.DTM25).filter((height): height is number => Number.isFinite(height))
+    const serviceTotal = serviceDistances.at(-1) ?? 0
+    const reportedTotal = points.at(-1)?.dist ?? 0
+    let upper = 0
+    const valid = points.flatMap((point, index) => {
+      const height = point.alts?.COMB ?? point.alts?.DTM2 ?? point.alts?.DTM25
+      if (typeof height !== 'number' || !Number.isFinite(height)) return []
+      const distance = Math.max(0, Math.min(serviceTotal, typeof point.dist === 'number' && Number.isFinite(point.dist) && reportedTotal > 0 ? point.dist / reportedTotal * serviceTotal : index / Math.max(1, points.length - 1) * serviceTotal))
+      while (upper < serviceDistances.length - 1 && serviceDistances[upper] < distance) upper++
+      const lower = Math.max(0, upper - 1)
+      const span = serviceDistances[upper] - serviceDistances[lower]
+      const fraction = span > 0 ? (distance - serviceDistances[lower]) / span : 0
+      return [{ height, distance: sampledDistances[lower] + (sampledDistances[upper] - sampledDistances[lower]) * fraction }]
+    })
+    const profile = valid.map((sample) => sample.height)
     let gain = 0; let loss = 0
     for (let index = 1; index < profile.length; index++) {
       const delta = profile[index] - profile[index - 1]
       if (Math.abs(delta) > 80) continue
       if (delta > 0) gain += delta; else loss -= delta
     }
-    return { profile, gain: Math.round(gain), loss: Math.round(loss) }
-  } catch { return { profile: [], gain: 0, loss: 0 } }
+    return { profile, distances: valid.map((sample) => sample.distance), gain: Math.round(gain), loss: Math.round(loss) }
+  } catch { return { profile: [], distances: [], gain: 0, loss: 0 } }
 }
 
 export class FossgisBikeProvider implements RoutingProvider {
@@ -104,7 +123,7 @@ export class FossgisBikeProvider implements RoutingProvider {
     return {
       id: crypto.randomUUID(), name: createRouteName(request.locale, request.profile, request.mode, request.waypoints), createdAt: now, updatedAt: now,
       profile: request.profile, mode: request.mode, geometry: routed.geometry, waypoints: [...request.waypoints, ...generatedWaypoints],
-      metrics: { distanceKm: Math.round(routed.distance / 100) / 10, durationMinutes: Math.max(1, Math.round(routed.duration / 60)), elevationGainM: elevation.gain, elevationLossM: elevation.loss, asphaltPercent: 0, cyclewayPercent: 0, confidence: 'verified', elevationProfile: elevation.profile },
+      metrics: { distanceKm: Math.round(routed.distance / 100) / 10, durationMinutes: Math.max(1, Math.round(routed.duration / 60)), elevationGainM: elevation.gain, elevationLossM: elevation.loss, asphaltPercent: 0, cyclewayPercent: 0, confidence: 'verified', elevationProfile: elevation.profile, elevationDistancesKm: elevation.distances },
       warnings: [...qualityWarning, de ? 'Untergrund und Radweganteil sind bei diesem Router nicht analysiert.' : 'Surface and cycleway share are not analysed by this router.', de ? 'Der öffentliche Fallback verwendet ein allgemeines Fahrradprofil; die erweiterten Fahrradwünsche gelten vollständig mit Valhalla.' : 'The public fallback uses a general bicycle profile; advanced bicycle preferences apply fully with Valhalla.'],
       provenance: { routingEngine: 'FOSSGIS OSRM Bike', primaryDataSource: 'OpenStreetMap · swisstopo elevation', graphVersion: 'FOSSGIS rolling OSM graph', dataUpdatedAt: now, analyzedAt: now, regionId: 'ch', confidence: elevation.profile.length ? 'medium' : 'low' },
     }

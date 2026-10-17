@@ -3,6 +3,7 @@ import type { RoutingProvider } from './provider'
 import { decodePolyline } from './polyline'
 import { createRoundTripSeeds, evaluateRoundTrip, type RouteQuality } from './round-trip-quality'
 import { createRouteName } from '@/lib/route-name'
+import { cumulativeDistances } from '@/lib/route-analysis'
 
 type ValhallaLeg = { shape: string | GeoJSON.LineString }
 type ValhallaResponse = { trip?: { summary?: { length?: number; time?: number }; legs?: ValhallaLeg[]; status_message?: string } }
@@ -22,6 +23,9 @@ async function fetchElevation(baseUrl: string, coordinates: Coordinate[]) {
   const stride = Math.max(1, Math.ceil(coordinates.length / 120))
   const sampled = coordinates.filter((_, index) => index % stride === 0)
   if (sampled.at(-1) !== coordinates.at(-1)) sampled.push(coordinates.at(-1)!)
+  const distances = cumulativeDistances(coordinates)
+  const sampledDistances = distances.filter((_, index) => index % stride === 0)
+  if ((coordinates.length - 1) % stride !== 0) sampledDistances.push(distances.at(-1)!)
   try {
     const response = await fetch(`${baseUrl.replace(/\/$/, '')}/height`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(5_000),
@@ -29,15 +33,16 @@ async function fetchElevation(baseUrl: string, coordinates: Coordinate[]) {
     })
     if (!response.ok) throw new Error('VALHALLA_HEIGHT_FAILED')
     const data = await response.json() as { height?: Array<number | null> }
-    const profile = (data.height ?? []).filter((height): height is number => Number.isFinite(height))
+    const valid = (data.height ?? []).flatMap((height, index) => typeof height === 'number' && Number.isFinite(height) && index < sampled.length ? [{ height, distance: sampledDistances[index] }] : [])
+    const profile = valid.map((sample) => sample.height)
     let gain = 0; let loss = 0
     for (let index = 1; index < profile.length; index++) {
       const difference = profile[index] - profile[index - 1]
       if (Math.abs(difference) > 80) continue
       if (difference > 0) gain += difference; else loss -= difference
     }
-    return { profile, gain: Math.round(gain), loss: Math.round(loss) }
-  } catch { return { profile: [], gain: 0, loss: 0 } }
+    return { profile, distances: valid.map((sample) => sample.distance), gain: Math.round(gain), loss: Math.round(loss) }
+  } catch { return { profile: [], distances: [], gain: 0, loss: 0 } }
 }
 
 type TraceEdge = { length?: number; surface?: string; use?: string; cycle_lane?: string; tunnel?: boolean; dismount?: boolean }
@@ -167,7 +172,7 @@ export class ValhallaProvider implements RoutingProvider {
     return {
       id: crypto.randomUUID(), name: createRouteName(request.locale, request.profile, request.mode, request.waypoints), createdAt, updatedAt: createdAt,
       profile: request.profile, mode: request.mode, geometry: { type: 'LineString', coordinates }, waypoints: [...request.waypoints, ...generatedWaypoints],
-      metrics: { distanceKm: Math.round(distanceKm * 10) / 10, durationMinutes: Math.round(durationSeconds / 60), elevationGainM: elevation.gain, elevationLossM: elevation.loss, asphaltPercent: attributes.asphaltPercent, cyclewayPercent: attributes.cyclewayPercent, confidence: 'verified', elevationProfile: elevation.profile },
+      metrics: { distanceKm: Math.round(distanceKm * 10) / 10, durationMinutes: Math.round(durationSeconds / 60), elevationGainM: elevation.gain, elevationLossM: elevation.loss, asphaltPercent: attributes.asphaltPercent, cyclewayPercent: attributes.cyclewayPercent, confidence: 'verified', elevationProfile: elevation.profile, elevationDistancesKm: elevation.distances },
       warnings: [...qualityWarning, ...attributes.warnings],
       provenance: { routingEngine: `Valhalla ${graph.graphVersion}`, primaryDataSource: request.locale === 'de' ? 'OpenStreetMap / Geofabrik Schweiz' : 'OpenStreetMap / Geofabrik Switzerland', graphVersion: graph.graphVersion, dataUpdatedAt: graph.dataUpdatedAt, analyzedAt: createdAt, regionId: 'ch', confidence: attributes.analyzed && elevation.profile.length ? 'high' : 'medium' },
     }

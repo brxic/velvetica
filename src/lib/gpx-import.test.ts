@@ -1,9 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import { GpxImportError, parseGpx } from './gpx-import'
+import { plannedRouteSchema } from './route-schema'
 
 const gpx = (body: string) => `<?xml version="1.0"?><gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1">${body}</gpx>`
 
 describe('GPX import', () => {
+  it('keeps accepted long GPX profiles readable by cloud and local persistence', () => {
+    const points = Array.from({ length: 6_001 }, (_, index) => `<trkpt lat="46.9" lon="${7.4 + index * .000001}"><ele>500</ele></trkpt>`).join('')
+    const route = parseGpx(gpx(`<trk><trkseg>${points}</trkseg></trk>`), 'long.gpx', 'de', 'road')
+    expect(route.metrics.elevationProfile).toHaveLength(6_001)
+    expect(plannedRouteSchema.safeParse(route).success).toBe(true)
+  })
   it('keeps track geometry and derives metrics', () => {
     const route = parseGpx(gpx('<metadata><name>Bern ride</name></metadata><trk><trkseg><trkpt lat="46.948" lon="7.447"><ele>500</ele></trkpt><trkpt lat="46.958" lon="7.457"><ele>530</ele></trkpt></trkseg></trk>'), 'ride.gpx', 'de', 'road')
     expect(route.name).toBe('Bern ride')

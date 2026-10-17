@@ -10,7 +10,7 @@ export function PlaceSearch({ kind, locale, value, onSelect, onClear }: {
   kind: 'start' | 'end'
   locale: Locale
   value?: string
-  onSelect: (place: Place) => void
+  onSelect: (place: Place) => boolean | void
   onClear?: () => void
 }) {
   const id = useId()
@@ -44,7 +44,7 @@ export function PlaceSearch({ kind, locale, value, onSelect, onClear }: {
     {loading && <span className="search-loader" aria-label={locale === 'de' ? 'Suche läuft' : 'Searching'} />}
     {value && <button type="button" onClick={() => { setQuery(''); setResults([]); onClear?.() }} aria-label={locale === 'de' ? 'Ort entfernen' : 'Remove place'}><X size={15} /></button>}
     {open && query.trim().length >= 2 && results.length > 0 && <ul role="listbox">
-      {results.map((place) => <li key={`${place.coordinate.join(',')}-${place.label}`}><button type="button" onClick={() => { setQuery(place.label); setResults([]); setOpen(false); onSelect(place) }}><MapPin size={15} /><span>{place.label}</span></button></li>)}
+      {results.map((place) => <li key={`${place.coordinate.join(',')}-${place.label}`}><button type="button" onClick={() => { const accepted = onSelect(place); setQuery(accepted === false ? value ?? '' : place.label); setResults([]); setOpen(false) }}><MapPin size={15} /><span>{place.label}</span></button></li>)}
     </ul>}
   </div>
 }

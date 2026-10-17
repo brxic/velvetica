@@ -25,6 +25,8 @@ export type RouteMetrics = {
   cyclewayPercent: number
   confidence: 'preview' | 'verified'
   elevationProfile: number[]
+  /** Distance along the geometry for each elevation value; absent on legacy routes. */
+  elevationDistancesKm?: number[]
 }
 
 export type RoutePreferences = {

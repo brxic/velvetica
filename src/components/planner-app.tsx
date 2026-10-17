@@ -25,6 +25,7 @@ import { RouteShare } from './route-share'
 import { useDialogFocus } from './dialog-focus'
 import { plannedRouteSchema } from '@/lib/route-schema'
 import { RouteThumbnail } from './route-thumbnail'
+import { acknowledgeSavedDraft, routeSignature, type RouteSyncState } from '@/lib/route-draft'
 
 const LEGACY_STORAGE_KEY = 'velvetia.saved-routes.v1'
 const STORAGE_KEY_PREFIX = 'velvetia.saved-routes.v2'
@@ -37,8 +38,7 @@ const profiles: Array<{ id: BikeProfile; icon: typeof Bike }> = [
 
 function formatDuration(minutes: number) { const h = Math.floor(minutes / 60); const m = minutes % 60; return `${h}:${String(m).padStart(2, '0')} h` }
 function readStoredRoutes(key: string): PlannedRoute[] { try { const items: unknown = JSON.parse(localStorage.getItem(key) ?? '[]'); return Array.isArray(items) ? items.flatMap((item) => { const parsed = plannedRouteSchema.safeParse(item); return parsed.success ? [parsed.data] : [] }) : [] } catch { return [] } }
-function writeStoredRoutes(key: string, routes: PlannedRoute[]) { try { localStorage.setItem(key, JSON.stringify(routes)) } catch { /* localStorage may be unavailable or full */ } }
-function routeSignature(route: PlannedRoute) { return JSON.stringify({ name: route.name.trim(), description: route.description ?? '', profile: route.profile, mode: route.mode, geometry: route.geometry, waypoints: route.waypoints.filter((point) => point.kind !== 'generated'), metrics: route.metrics }) }
+function writeStoredRoutes(key: string, routes: PlannedRoute[]) { try { localStorage.setItem(key, JSON.stringify(routes)); return true } catch { return false } }
 function mergeSavedRoutes(local: PlannedRoute[], remote: PlannedRoute[]) {
   const routes = new Map<string, PlannedRoute>()
   for (const route of [...local, ...remote]) {
@@ -86,6 +86,9 @@ export function PlannerApp() {
   const [maxSavedDistance, setMaxSavedDistance] = useState(500)
   const [saving, setSaving] = useState(false)
   const [syncConflict, setSyncConflict] = useState(false)
+  const [routeSyncStates, setRouteSyncStates] = useState<Record<string, RouteSyncState>>({})
+  const saveInFlightRef = useRef(false)
+  const identityEpochRef = useRef(0)
   const accountDefaultsRef = useRef<AccountPreferences>(defaultAccountPreferences)
   const [speedKmh, setSpeedKmh] = useState<number | null>(null)
   const [activeProfileIndex, setActiveProfileIndex] = useState<number | null>(null)
@@ -132,14 +135,18 @@ export function PlannerApp() {
           return /^[0-9a-f-]{36}$/i.test(item.id) && (!serverRoute || new Date(item.updatedAt ?? item.createdAt).getTime() > new Date(serverRoute.updatedAt ?? serverRoute.createdAt).getTime())
         })
         let failedSync = false
+        const migrationStates = new Map<string, RouteSyncState>()
         const migrated = await Promise.all(pending.map(async (item) => {
           const saved = await authenticatedFetch(`/api/saved-routes/${item.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) })
+          migrationStates.set(item.id, saved.ok ? 'synced' : saved.status === 409 ? 'conflict' : 'local')
           if (!saved.ok) failedSync = true
           if (saved.status === 409 && loadId === cloudLoadRef.current) { setSyncConflict(true); setNotice('Eine Route wurde auf einem anderen Gerät geändert. Öffne sie und speichere deine Änderungen als Kopie. / A route changed on another device. Open it and save your changes as a copy.') }
           return saved.ok ? (await saved.json() as { route: PlannedRoute }).route : item
         }))
         if (loadId !== cloudLoadRef.current) return
         const merged = mergeSavedRoutes(mergeSavedRoutes(remote, migrated), readStoredRoutes(scopedKey))
+        const acknowledged = new Map([...remote, ...migrated.filter((item) => migrationStates.get(item.id) === 'synced')].map((item) => [item.id, item]))
+        setRouteSyncStates(Object.fromEntries(merged.map((item) => [item.id, migrationStates.get(item.id) === 'conflict' ? 'conflict' : acknowledged.has(item.id) && routeSignature(acknowledged.get(item.id)!) === routeSignature(item) ? 'synced' : 'local'])))
         setSavedRoutes(merged); writeStoredRoutes(scopedKey, merged); setPersistenceState(failedSync ? 'local' : 'server'); setAccountAuthenticated(payload.authenticated)
         if (payload.authenticated && homeResponse.ok) setHomePoint(((await homeResponse.json()) as { home: HomePoint | null }).home)
         else setHomePoint(null)
@@ -162,6 +169,8 @@ export function PlannerApp() {
       void loadCloudState(true)
     }, 0)
     const handleAuthChange = () => {
+      identityEpochRef.current++
+      setRouteSyncStates({})
       activeRouteRef.current = null
       historyLoadRef.current++; setHistoryRouteId(null); setRouteVersions([])
       routeRequestRef.current?.abort(); setRoute(null); setSavedRoutes([]); setHomePoint(null); setShowSaved(false); setAccountAuthenticated(false)
@@ -204,7 +213,7 @@ export function PlannerApp() {
     finally { if (routeRequestRef.current === controller) { routeRequestRef.current = null; setIsPlanning(false) } }
   }
 
-  async function planRoute() { await requestRoute(waypoints, false) }
+  async function planRoute() { if (confirmDiscard()) await requestRoute(waypoints, false) }
 
   function handleWaypointMove(id: string, longitude: number, latitude: number) {
     const next = waypoints.map((point) => point.id === id ? { ...point, coordinate: [longitude, latitude] as [number, number] } : point)
@@ -220,43 +229,51 @@ export function PlannerApp() {
     dispatchWaypoints({ type: 'commit', waypoints: next }); void requestRoute(next, true)
   }
 
-  function persistSaved(next: PlannedRoute[]) { setSavedRoutes(next); writeStoredRoutes(storageKeyRef.current, next) }
+  function persistSaved(next: PlannedRoute[]) { setSavedRoutes(next); return writeStoredRoutes(storageKeyRef.current, next) }
+
+  function setRouteSync(id: string, state: RouteSyncState) { setRouteSyncStates((current) => ({ ...current, [id]: state })) }
 
   async function syncSavedRoute(saved: PlannedRoute) {
-    const identityEpoch = cloudLoadRef.current
+    const identityEpoch = identityEpochRef.current
+    setRouteSync(saved.id, 'syncing')
     try {
       const response = await authenticatedFetch(`/api/saved-routes/${saved.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(saved) })
-      if (identityEpoch !== cloudLoadRef.current) return null
-      if (response.status === 409) { setSyncConflict(true); setNotice(locale === 'de' ? 'Diese Route wurde auf einem anderen Gerät geändert. Speichere deine Änderungen als Kopie oder lade die aktuelle Version neu.' : 'This route changed on another device. Save your changes as a copy or reload the current version.'); return null }
+      if (identityEpoch !== identityEpochRef.current) return null
+      if (response.status === 409) { setRouteSync(saved.id, 'conflict'); setSyncConflict(true); setNotice(locale === 'de' ? 'Diese Route wurde auf einem anderen Gerät geändert. Speichere deine Änderungen als Kopie oder lade die aktuelle Version neu.' : 'This route changed on another device. Save your changes as a copy or reload the current version.'); return null }
       if (!response.ok) throw new Error('LOCAL_ONLY')
-      setPersistenceState('server')
       const payload = await response.json() as { route: PlannedRoute; authenticated: boolean; storageScope: string }
+      if (identityEpoch !== identityEpochRef.current) return null
+      setPersistenceState('server')
       setAccountAuthenticated(payload.authenticated)
       storageKeyRef.current = `${STORAGE_KEY_PREFIX}.${payload.storageScope}`
+      setRouteSync(saved.id, 'synced')
       return payload.route
-    } catch { setPersistenceState('local'); return null }
+    } catch { if (identityEpoch === identityEpochRef.current) { setPersistenceState('local'); setRouteSync(saved.id, 'local') } return null }
   }
 
   async function saveRoute(asCopy = false) {
-    if (!route || saving) return
+    if (!route || saveInFlightRef.current) return
     const name = route.name.trim()
     if (!name) { setNotice(locale === 'de' ? 'Bitte gib der Route einen Namen.' : 'Please give the route a name.'); return }
     setSaving(true); setSyncConflict(false); setNotice(null)
-    const identityEpoch = cloudLoadRef.current
+    saveInFlightRef.current = true
+    const identityEpoch = identityEpochRef.current
     const timestamp = new Date().toISOString()
     const saved: PlannedRoute = asCopy
       ? { ...route, id: crypto.randomUUID(), name: `${name.slice(0, 73)} ${locale === 'de' ? 'Kopie' : 'copy'}`, createdAt: timestamp, updatedAt: timestamp, favorite: false, serverVersion: undefined }
       : { ...route, name, updatedAt: timestamp }
     const next = [saved, ...savedRoutes.filter((item) => item.id !== saved.id)].slice(0, 50)
-    persistSaved(next); setRoute(saved)
+    const locallySecured = persistSaved(next); setRoute(saved)
     const serverSaved = await syncSavedRoute(saved)
-    if (identityEpoch !== cloudLoadRef.current) { setSaving(false); return }
+    if (identityEpoch !== identityEpochRef.current) { saveInFlightRef.current = false; setSaving(false); return }
     if (serverSaved) {
-      const synced = [serverSaved, ...next.filter((item) => item.id !== serverSaved.id)]
-      persistSaved(synced); setRoute(serverSaved)
+      setSavedRoutes((items) => { const synced = [serverSaved, ...items.filter((item) => item.id !== serverSaved.id)]; writeStoredRoutes(storageKeyRef.current, synced); return synced })
+      setRoute((current) => acknowledgeSavedDraft(current, saved, serverSaved))
     }
     if (serverSaved) setNotice(asCopy ? (locale === 'de' ? 'Als neue Route gespeichert.' : 'Saved as a new route.') : (locale === 'de' ? `Route gespeichert · Version ${serverSaved.serverVersion}` : `Route saved · version ${serverSaved.serverVersion}`))
-    else setNotice((current) => current ?? (locale === 'de' ? 'Nur auf diesem Gerät gespeichert. Die Cloud ist gerade nicht erreichbar. Erneut speichern, sobald du online bist.' : 'Saved only on this device. Cloud storage is unavailable. Save again when online.'))
+    else if (!locallySecured) { setRouteSync(saved.id, 'error'); setNotice(locale === 'de' ? 'Speichern fehlgeschlagen: Weder lokaler Speicher noch Cloud sind verfügbar. Lass diese Route geöffnet und exportiere sie als GPX.' : 'Save failed: neither local storage nor cloud is available. Keep this route open and export it as GPX.') }
+    else setNotice((current) => current ?? (locale === 'de' ? 'Nur auf diesem Gerät gespeichert. Cloud-Synchronisierung ausstehend. Erneut speichern, sobald du online bist.' : 'Saved only on this device. Cloud sync pending. Save again when online.'))
+    saveInFlightRef.current = false
     setSaving(false)
   }
 
@@ -299,19 +316,32 @@ export function PlannerApp() {
   }
 
   async function restoreVersion(version: RouteVersion) {
-    if (saving) return
+    if (saveInFlightRef.current || !confirmDiscard()) return
     setSaving(true)
+    saveInFlightRef.current = true
+    const identityEpoch = identityEpochRef.current
     const latest = savedRoutes.find((item) => item.id === version.route.id)
     const restored = { ...version.route, serverVersion: latest?.serverVersion, updatedAt: new Date().toISOString() }
     const next = [restored, ...savedRoutes.filter((item) => item.id !== restored.id)]
-    persistSaved(next); setRoute(restored); dispatchWaypoints({ type: 'reset', waypoints: restored.waypoints }); setMode(restored.mode); setProfile(restored.profile); setShowSaved(false); setMobilePanel(false)
+    cancelPlanning()
+    const locallySecured = persistSaved(next)
+    setRoute(restored); dispatchWaypoints({ type: 'reset', waypoints: restored.waypoints }); setMode(restored.mode); setProfile(restored.profile); setShowSaved(false); setMobilePanel(false)
     const serverSaved = await syncSavedRoute(restored)
-    if (serverSaved) { persistSaved([serverSaved, ...next.filter((item) => item.id !== serverSaved.id)]); setRoute(serverSaved) }
+    if (identityEpoch !== identityEpochRef.current) { saveInFlightRef.current = false; setSaving(false); return }
+    if (serverSaved) {
+      setSavedRoutes((items) => { const synced = [serverSaved, ...items.filter((item) => item.id !== serverSaved.id)]; writeStoredRoutes(storageKeyRef.current, synced); return synced })
+      setRoute((current) => acknowledgeSavedDraft(current, restored, serverSaved))
+    }
     if (serverSaved) setNotice(locale === 'de' ? `Version ${version.version} als neue Version wiederhergestellt.` : `Version ${version.version} restored as a new version.`)
+    else if (!locallySecured) { setRouteSync(restored.id, 'error'); setNotice(locale === 'de' ? 'Wiederherstellung ist nicht gesichert. Bitte als GPX exportieren oder erneut speichern.' : 'Restored draft is not secured. Export GPX or save again.') }
+    else setNotice((current) => current ?? (locale === 'de' ? 'Version lokal wiederhergestellt. Cloud-Synchronisierung ausstehend.' : 'Version restored locally. Cloud sync pending.'))
+    saveInFlightRef.current = false
     setSaving(false)
   }
 
-  function reset() { routeRequestRef.current?.abort(); routeRequestRef.current = null; setIsPlanning(false); setRoute(null); dispatchWaypoints({ type: 'reset' }); setNotice(null); setSyncConflict(false); setMobilePanel(true); setRouteDetailsExpanded(false); const defaults = accountDefaultsRef.current; setProfile(defaults.profile); setDistance(defaults.distanceKm); setPreferences({ surface: defaults.surface, climbing: defaults.climbing, safety: defaults.safety }) }
+  function cancelPlanning() { routeRequestRef.current?.abort(); routeRequestRef.current = null; setIsPlanning(false); setActiveProfileIndex(null) }
+  function reset() { if (!confirmDiscard()) return; cancelPlanning(); setRoute(null); dispatchWaypoints({ type: 'reset' }); setNotice(null); setSyncConflict(false); setMobilePanel(true); setRouteDetailsExpanded(false); const defaults = accountDefaultsRef.current; setProfile(defaults.profile); setDistance(defaults.distanceKm); setPreferences({ surface: defaults.surface, climbing: defaults.climbing, safety: defaults.safety }) }
+  function changeMode(nextMode: RouteMode) { if (nextMode === mode || !confirmDiscard()) return; cancelPlanning(); setMode(nextMode); setRoute(null); dispatchWaypoints({ type: 'commit', waypoints: waypoints.filter((point) => point.kind === 'start') }) }
   function closeGuide() { setShowGuide(false); localStorage.setItem(GUIDE_KEY, 'true') }
 
   const visibleWaypoints = useMemo(() => waypoints.filter((point) => point.kind !== 'generated'), [waypoints])
@@ -319,9 +349,12 @@ export function PlannerApp() {
   const startPoint = waypoints.find((point) => point.kind === 'start')
   const endPoint = waypoints.find((point) => point.kind === 'end')
   function selectPlace(kind: 'start' | 'end', place: { label: string; coordinate: [number, number] }) {
+    if (!confirmDiscard()) return false
+    cancelPlanning()
     setRoute(null); setNotice(null)
     const next = waypoints.filter((point) => point.kind !== kind)
     dispatchWaypoints({ type: 'commit', waypoints: [...next, { id: crypto.randomUUID(), coordinate: place.coordinate, label: place.label, kind }] })
+    return true
   }
   async function saveCurrentStartAsHome() {
     if (!startPoint || !accountAuthenticated) return
@@ -340,10 +373,10 @@ export function PlannerApp() {
   }
   function useHomeAsStart() {
     if (!homePoint) return
-    selectPlace('start', homePoint)
+    if (!selectPlace('start', homePoint)) return
     setNotice(locale === 'de' ? 'Zuhause als Startpunkt gesetzt.' : 'Home set as your start point.')
   }
-  function clearPlace(kind: 'start' | 'end') { setRoute(null); dispatchWaypoints({ type: 'commit', waypoints: waypoints.filter((point) => point.kind !== kind) }) }
+  function clearPlace(kind: 'start' | 'end') { if (!confirmDiscard()) return; cancelPlanning(); setRoute(null); dispatchWaypoints({ type: 'commit', waypoints: waypoints.filter((point) => point.kind !== kind) }) }
   function removeWaypoint(id: string) { const next = waypoints.filter((point) => point.id !== id); dispatchWaypoints({ type: 'commit', waypoints: next }); if (route) void requestRoute(next, true); else setRoute(null) }
   function undoWaypoints() { const next = waypointHistory.past.at(-1); if (!next) return; dispatchWaypoints({ type: 'undo' }); if (route) void requestRoute(next, true); else setRoute(null) }
   function redoWaypoints() { const next = waypointHistory.future[0]; if (!next) return; dispatchWaypoints({ type: 'redo' }); if (route) void requestRoute(next, true); else setRoute(null) }
@@ -354,7 +387,18 @@ export function PlannerApp() {
     .sort((a, b) => Number(Boolean(b.favorite)) - Number(Boolean(a.favorite)) || (savedSort === 'name' ? a.name.localeCompare(b.name, locale) : savedSort === 'distance' ? b.metrics.distanceKm - a.metrics.distanceKm : new Date(b.updatedAt ?? b.createdAt).getTime() - new Date(a.updatedAt ?? a.createdAt).getTime()))
 
   const persistedRoute = route ? savedRoutes.find((saved) => saved.id === route.id) : undefined
-  const hasUnsavedChanges = Boolean(route && (!persistedRoute || routeSignature(route) !== routeSignature(persistedRoute)))
+  const currentSyncState = route ? routeSyncStates[route.id] ?? 'local' : 'local'
+  const hasUnsavedChanges = Boolean(route && (currentSyncState === 'error' || !persistedRoute || routeSignature(route) !== routeSignature(persistedRoute)))
+  const saveStatus = currentSyncState === 'error' ? (locale === 'de' ? 'Nicht gesichert' : 'Not saved') : currentSyncState === 'conflict' ? (locale === 'de' ? 'Konflikt · lokal' : 'Conflict · local') : currentSyncState === 'syncing' ? (locale === 'de' ? 'Synchronisiert …' : 'Syncing …') : hasUnsavedChanges ? (locale === 'de' ? 'Ungespeichert' : 'Unsaved') : currentSyncState === 'synced' ? (locale === 'de' ? 'Cloud synchronisiert' : 'Cloud synced') : (locale === 'de' ? 'Lokal · Cloud ausstehend' : 'Local · cloud pending')
+  function confirmDiscard() {
+    return !(hasUnsavedChanges || saving) || window.confirm(locale === 'de' ? 'Ungesicherte Änderungen oder ein laufender Speichervorgang sind vorhanden. Diesen Entwurf wirklich verlassen?' : 'There are unsaved changes or a save in progress. Really leave this draft?')
+  }
+  useEffect(() => {
+    if (!hasUnsavedChanges && !saving) return
+    const protectDraft = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
+    window.addEventListener('beforeunload', protectDraft)
+    return () => window.removeEventListener('beforeunload', protectDraft)
+  }, [hasUnsavedChanges, saving])
   const isGpxImport = route?.provenance.routingEngine === 'GPX Import'
   const hasSurfaceAnalysis = !isGpxImport && route?.provenance.routingEngine !== 'FOSSGIS OSRM Bike'
 
@@ -364,7 +408,8 @@ export function PlannerApp() {
     try {
       if (file.size > MAX_GPX_FILE_BYTES) throw new Error('file-too-large')
       const imported = parseGpx(await file.text(), file.name, locale, profile)
-      routeRequestRef.current?.abort()
+      if (!confirmDiscard()) return
+      cancelPlanning()
       setRoute(imported); dispatchWaypoints({ type: 'reset', waypoints: imported.waypoints }); setMode(imported.mode)
       setDistance(Math.max(5, Math.min(250, Math.round(imported.metrics.distanceKm / 5) * 5)))
       setShowRouteDetails(true); setActiveProfileIndex(null); setMobilePanel(false)
@@ -385,6 +430,8 @@ export function PlannerApp() {
     }
   }
   function openSavedRoute(saved: PlannedRoute) {
+    if (!confirmDiscard()) return
+    cancelPlanning()
     const editable = ensureEditableAnchors(saved)
     setRoute(editable); dispatchWaypoints({ type: 'reset', waypoints: editable.waypoints }); setMode(editable.mode); setProfile(editable.profile); setShowSaved(false); setMobilePanel(false)
   }
@@ -420,8 +467,8 @@ export function PlannerApp() {
       <div className="panel-intro"><p className="eyebrow">{locale === 'de' ? 'Schweizer Routenplaner' : 'Swiss route planner'}</p><h1>{locale === 'de' ? 'Wohin möchtest du fahren?' : 'Where do you want to ride?'}</h1><p>{locale === 'de' ? 'Suche einen Ort oder setze Punkte direkt auf der Karte. Den Rest übernimmt Velvetia.' : 'Search for a place or choose points on the map. Velvetia takes care of the rest.'}</p></div>
 
       <div className="segmented-control" aria-label={locale === 'de' ? 'Routentyp' : 'Route type'}>
-        <button className={mode === 'round-trip' ? 'is-active' : ''} onClick={() => { setMode('round-trip'); setRoute(null); dispatchWaypoints({ type: 'commit', waypoints: waypoints.filter((p) => p.kind === 'start') }) }}>{copy.roundTrip}</button>
-        <button className={mode === 'one-way' ? 'is-active' : ''} onClick={() => { setMode('one-way'); setRoute(null); dispatchWaypoints({ type: 'commit', waypoints: waypoints.filter((p) => p.kind === 'start') }) }}>{copy.oneWay}</button>
+        <button className={mode === 'round-trip' ? 'is-active' : ''} aria-pressed={mode === 'round-trip'} onClick={() => changeMode('round-trip')}>{copy.roundTrip}</button>
+        <button className={mode === 'one-way' ? 'is-active' : ''} aria-pressed={mode === 'one-way'} onClick={() => changeMode('one-way')}>{copy.oneWay}</button>
       </div>
 
       <section className="form-section">
@@ -471,7 +518,7 @@ export function PlannerApp() {
     </aside>
 
     {route && <section className={`route-summary ${routeDetailsExpanded ? 'is-expanded' : ''}`} aria-label={locale === 'de' ? 'Routenzusammenfassung' : 'Route summary'}>
-      <div className="route-summary-head"><div><p className="eyebrow">{copy.routeReady}</p><input className="route-name-input" value={route.name} maxLength={80} aria-label={locale === 'de' ? 'Routenname' : 'Route name'} onChange={(event) => setRoute({ ...route, name: event.target.value })} /><textarea className="route-description-input" value={route.description ?? ''} maxLength={300} rows={1} placeholder={locale === 'de' ? 'Beschreibung hinzufügen …' : 'Add a description …'} aria-label={locale === 'de' ? 'Routenbeschreibung' : 'Route description'} onChange={(event) => setRoute({ ...route, description: event.target.value })} /></div><div className="route-statuses"><span className={`save-status ${hasUnsavedChanges ? 'is-dirty' : ''}`}>{hasUnsavedChanges ? (locale === 'de' ? 'Ungespeichert' : 'Unsaved') : (locale === 'de' ? 'Gespeichert' : 'Saved')}</span><span className={`preview-badge ${route.metrics.confidence === 'verified' ? 'is-verified' : ''}`}>{isGpxImport ? 'GPX Import' : route.metrics.confidence === 'verified' ? (locale === 'de' ? 'OSM-Routing' : 'OSM routing') : copy.preview}</span><button className="route-expand-toggle" onClick={() => { const expanded = !routeDetailsExpanded; setRouteDetailsExpanded(expanded); if (expanded) setShowRouteDetails(true) }} aria-pressed={routeDetailsExpanded} aria-label={routeDetailsExpanded ? (locale === 'de' ? 'Kompakte Detailansicht' : 'Compact detail view') : (locale === 'de' ? 'Grosse Detailansicht neben der Karte' : 'Large detail view beside the map')}>{routeDetailsExpanded ? <Minimize2 size={15} /> : <Maximize2 size={15} />}<span>{routeDetailsExpanded ? (locale === 'de' ? 'Kompakt' : 'Compact') : (locale === 'de' ? 'Gross' : 'Expand')}</span></button><button className={`route-detail-toggle ${showRouteDetails ? 'is-open' : ''}`} onClick={() => setShowRouteDetails(!showRouteDetails)} aria-expanded={showRouteDetails} aria-label={showRouteDetails ? (locale === 'de' ? 'Routendetails ausblenden' : 'Hide route details') : (locale === 'de' ? 'Routendetails einblenden' : 'Show route details')}><ChevronDown size={16} /><span>{showRouteDetails ? (locale === 'de' ? 'Details ausblenden' : 'Hide details') : (locale === 'de' ? 'Details anzeigen' : 'Show details')}</span></button></div></div>
+      <div className="route-summary-head"><div><p className="eyebrow">{copy.routeReady}</p><input className="route-name-input" value={route.name} maxLength={80} aria-label={locale === 'de' ? 'Routenname' : 'Route name'} onChange={(event) => setRoute({ ...route, name: event.target.value })} /><textarea className="route-description-input" value={route.description ?? ''} maxLength={300} rows={1} placeholder={locale === 'de' ? 'Beschreibung hinzufügen …' : 'Add a description …'} aria-label={locale === 'de' ? 'Routenbeschreibung' : 'Route description'} onChange={(event) => setRoute({ ...route, description: event.target.value })} /></div><div className="route-statuses"><span className={`save-status ${hasUnsavedChanges ? 'is-dirty' : ''}`}>{saveStatus}</span><span className={`preview-badge ${route.metrics.confidence === 'verified' ? 'is-verified' : ''}`}>{isGpxImport ? 'GPX Import' : route.metrics.confidence === 'verified' ? (locale === 'de' ? 'OSM-Routing' : 'OSM routing') : copy.preview}</span><button className="route-expand-toggle" onClick={() => { const expanded = !routeDetailsExpanded; setRouteDetailsExpanded(expanded); if (expanded) setShowRouteDetails(true) }} aria-pressed={routeDetailsExpanded} aria-label={routeDetailsExpanded ? (locale === 'de' ? 'Kompakte Detailansicht' : 'Compact detail view') : (locale === 'de' ? 'Grosse Detailansicht neben der Karte' : 'Large detail view beside the map')}>{routeDetailsExpanded ? <Minimize2 size={15} /> : <Maximize2 size={15} />}<span>{routeDetailsExpanded ? (locale === 'de' ? 'Kompakt' : 'Compact') : (locale === 'de' ? 'Gross' : 'Expand')}</span></button><button className={`route-detail-toggle ${showRouteDetails ? 'is-open' : ''}`} onClick={() => setShowRouteDetails(!showRouteDetails)} aria-expanded={showRouteDetails} aria-label={showRouteDetails ? (locale === 'de' ? 'Routendetails ausblenden' : 'Hide route details') : (locale === 'de' ? 'Routendetails einblenden' : 'Show route details')}><ChevronDown size={16} /><span>{showRouteDetails ? (locale === 'de' ? 'Details ausblenden' : 'Hide details') : (locale === 'de' ? 'Details anzeigen' : 'Show details')}</span></button></div></div>
       {showRouteDetails && <div className="route-details"><div className="metric-grid">
         <div><RouteIcon /><span>{copy.distanceLabel}</span><strong>{route.metrics.distanceKm} km</strong></div>
         <div><Clock3 /><span>{copy.time}{speedKmh ? ` · ${speedKmh} km/h` : ''}</span><strong>{formatDuration(speedKmh ? Math.round(route.metrics.distanceKm / speedKmh * 60) : route.metrics.durationMinutes)}</strong></div>

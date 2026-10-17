@@ -52,6 +52,7 @@ test('one-way hides distance; planning failure keeps input and offers a retry', 
   const toggle = page.getByRole('button', { name: 'Planungsmenü öffnen' })
   if (await toggle.isVisible()) await toggle.click()
   await page.route('**/api/routes/plan', (route) => route.fulfill({ status: 422, json: { code: 'ROUTE_FAILED' } }))
+  page.once('dialog', (dialog) => dialog.accept())
   await page.getByRole('button', { name: 'Route planen', exact: true }).click()
   await expect(page.getByRole('status')).toContainText('nicht berechnet')
   await expect(page.getByRole('textbox', { name: 'Routenname', exact: true })).toBeVisible()
