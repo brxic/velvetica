@@ -24,5 +24,5 @@ export function downloadGpx(route: PlannedRoute) {
   const blob = new Blob([routeToGpx(route)], { type: 'application/gpx+xml;charset=utf-8' })
   const url = URL.createObjectURL(blob); const anchor = document.createElement('a')
   anchor.href = url; anchor.download = `${route.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.gpx`; anchor.click()
-  URL.revokeObjectURL(url)
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
 }

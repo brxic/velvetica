@@ -6,6 +6,8 @@ import { type FormEvent, useEffect, useState } from 'react'
 import type { Locale } from '@/lib/domain'
 import { announceAuthState } from '@/lib/auth-client'
 import { getBrowserSupabase } from '@/lib/supabase/browser'
+import { AccountSettings } from './account-settings'
+import { useDialogFocus } from './dialog-focus'
 
 type AuthView = 'sign-in' | 'sign-up' | 'forgot-password' | 'update-password'
 type Notice = { text: string; tone: 'success' | 'error' }
@@ -23,6 +25,7 @@ export function AccountMenu({ locale }: { locale: Locale }) {
   const [pending, setPending] = useState(false)
   const [notice, setNotice] = useState<Notice | null>(null)
   const de = locale === 'de'
+  const dialogRef = useDialogFocus(open, () => setOpen(false))
 
   useEffect(() => {
     if (!supabase) return
@@ -161,7 +164,7 @@ export function AccountMenu({ locale }: { locale: Locale }) {
       {user ? <UserRound size={18} /> : <LogIn size={18} />}<span>{user ? (de ? 'Konto' : 'Account') : (de ? 'Anmelden' : 'Sign in')}</span>
     </button>
     {open && <div className="account-backdrop" onClick={() => setOpen(false)}>
-      <section className="account-dialog" role="dialog" aria-modal="true" aria-labelledby="account-title" onClick={(event) => event.stopPropagation()}>
+      <section ref={dialogRef} className={`account-dialog ${user && !isUpdatingPassword ? 'has-settings' : ''}`} role="dialog" aria-modal="true" aria-labelledby="account-title" onClick={(event) => event.stopPropagation()}>
         <button type="button" className="icon-button account-close" onClick={() => setOpen(false)} aria-label={de ? 'Schliessen' : 'Close'}><X size={18} /></button>
         <div className="account-icon">{user && !isUpdatingPassword ? <UserRound /> : <Cloud />}</div>
         <p className="eyebrow">Velvetia Cloud</p>
@@ -171,7 +174,7 @@ export function AccountMenu({ locale }: { locale: Locale }) {
           <div className="account-feature"><Check size={16} />{de ? 'Lokales Planen und Speichern funktioniert weiterhin.' : 'Local planning and saving continues to work.'}</div>
         </> : user && !isUpdatingPassword ? <>
           <div className="account-user"><span>{de ? 'Angemeldet als' : 'Signed in as'}</span><strong>{user.email}</strong></div>
-          <div className="account-feature"><Check size={16} />{de ? 'Deine Routen und Versionen werden diesem Konto zugeordnet.' : 'Your routes and versions are linked to this account.'}</div>
+          <AccountSettings locale={locale} />
           <button type="button" className="secondary-button account-submit" onClick={() => selectView('update-password')} disabled={pending}><LockKeyhole size={17} />{de ? 'Passwort festlegen oder ändern' : 'Set or change password'}</button>
           <button type="button" className="account-link account-signout" onClick={() => void signOut()} disabled={pending}><LogOut size={15} />{de ? 'Abmelden' : 'Sign out'}</button>
         </> : view === 'forgot-password' ? <>

@@ -102,3 +102,9 @@ Das Repository ist für einen Vercel-Import über GitHub vorbereitet. Ohne zusä
 Die vollständige Anleitung und die spätere Umschaltung auf eine externe Valhalla-Instanz stehen in [docs/VERCEL_DEPLOYMENT.md](./docs/VERCEL_DEPLOYMENT.md).
 
 Supabase Auth, PostGIS, Row Level Security und die drei erforderlichen Deployment-Variablen werden in [docs/SUPABASE_SETUP.md](./docs/SUPABASE_SETUP.md) eingerichtet.
+
+## Beta-Workspace
+
+Konten unterstützen Planungsstandards, die Verwaltung des Home-Punkts, Datenexport und bestätigte Kontolöschung. Die Routenbibliothek bietet Filter, wiederherstellbare Versionen, Konflikterkennung bei Änderungen auf mehreren Geräten und widerrufbare Freigabelinks. Die App-Oberfläche wurde für Desktop und Mobile überarbeitet.
+
+Implementierung, Datenbankmigration, Testbefehle und die Grenzen der jeweiligen Prüfungen sind in [docs/BETA_WORKSPACE.md](./docs/BETA_WORKSPACE.md) beschrieben. Browserprüfungen starten mit `npm run test:e2e`; isolierte PostGIS- und Backup/Restore-Prüfungen mit `npm run test:integration` bei laufender Docker-Engine.

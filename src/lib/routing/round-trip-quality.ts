@@ -22,7 +22,7 @@ export function distanceKm(a: Coordinate, b: Coordinate) {
   const longitudeDelta = (b[0] - a[0]) * Math.PI / 180
   const haversine = Math.sin(latitudeDelta / 2) ** 2
     + Math.cos(latitude1) * Math.cos(latitude2) * Math.sin(longitudeDelta / 2) ** 2
-  return 2 * EARTH_RADIUS_KM * Math.asin(Math.sqrt(haversine))
+  return 2 * EARTH_RADIUS_KM * Math.asin(Math.sqrt(Math.min(1, Math.max(0, haversine))))
 }
 
 function destination(origin: Coordinate, distance: number, bearingDegrees: number) {
@@ -84,7 +84,7 @@ export function evaluateRoundTrip(
   actualDistanceKm: number,
   targetDistanceKm: number,
 ): RouteQuality {
-  if (coordinates.length < 3 || targetDistanceKm <= 0) {
+  if (coordinates.length < 3 || targetDistanceKm <= 0 || !Number.isFinite(actualDistanceKm) || actualDistanceKm <= 0 || !coordinates.every((point) => point.every(Number.isFinite))) {
     return { score: Number.POSITIVE_INFINITY, distanceDeviation: 1, repeatedShare: 1, radialExcess: 1, acceptable: false }
   }
 
@@ -94,7 +94,8 @@ export function evaluateRoundTrip(
   const allowedRadius = Math.max(3, targetDistanceKm * .42)
   const radialExcess = Math.max(0, maximumRadius / allowedRadius - 1)
   const score = distanceDeviation * 55 + repeatedShare * 120 + radialExcess * 70
-  const acceptable = distanceDeviation <= .18 && repeatedShare <= .16 && radialExcess <= .12
+  const closed = distanceKm(coordinates[0], coordinates.at(-1)!) < .5
+  const acceptable = closed && distanceDeviation <= .18 && repeatedShare <= .16 && radialExcess <= .12
 
   return { score: Math.round(score * 100) / 100, distanceDeviation, repeatedShare, radialExcess, acceptable }
 }

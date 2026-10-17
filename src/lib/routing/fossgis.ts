@@ -52,7 +52,7 @@ export class FossgisBikeProvider implements RoutingProvider {
     await respectPublicRateLimit()
     const locations = coordinates.map(([longitude, latitude]) => `${longitude.toFixed(6)},${latitude.toFixed(6)}`).join(';')
     const url = `${this.baseUrl.replace(/\/$/, '')}/route/v1/driving/${locations}?overview=full&geometries=geojson&steps=false&continue_straight=true`
-    const response = await fetch(url, { headers: { 'User-Agent': 'Velvetia/0.1 (https://github.com/brxic/velvetica)', 'Accept': 'application/json' }, signal: AbortSignal.timeout(25_000) })
+    const response = await fetch(url, { headers: { 'User-Agent': 'Velvetia/0.1 (https://github.com/brxic/velvetica)', 'Accept': 'application/json' }, signal: AbortSignal.timeout(12_000) })
     if (!response.ok) throw new Error(`FOSSGIS_HTTP_${response.status}`)
     const result = await response.json() as OsrmResponse
     const route = result.routes?.[0]
@@ -66,22 +66,32 @@ export class FossgisBikeProvider implements RoutingProvider {
     let generatedWaypoints: PlanningRequest['waypoints'] = []
     let qualityWarning: string[] = []
     if (request.mode === 'round-trip' && explicit.length === 1) {
-      const routeSeed = async (scale: number) => {
-        const seed = createRoundTripSeeds(explicit[0], request.targetDistanceKm, scale)[0]
+      const routeSeed = async (scale: number, direction = 0) => {
+        const seed = createRoundTripSeeds(explicit[0], request.targetDistanceKm, scale)[direction]
         const anchors = seed.locations.map((location) => [location.lon, location.lat] as Coordinate)
         return { anchors, route: await this.route([explicit[0], ...anchors, explicit[0]]) }
       }
       let selected = await routeSeed(1)
+      const qualityOf = (candidate: typeof selected) => evaluateRoundTrip(candidate.route.geometry.coordinates as Coordinate[], explicit[0], candidate.route.distance / 1000, request.targetDistanceKm)
       const firstDistanceKm = selected.route.distance / 1000
       if (Math.abs(firstDistanceKm - request.targetDistanceKm) / request.targetDistanceKm > .15) {
         const correction = Math.max(.65, Math.min(1.35, request.targetDistanceKm / Math.max(1, firstDistanceKm)))
         const corrected = await routeSeed(correction)
-        if (Math.abs(corrected.route.distance / 1000 - request.targetDistanceKm) < Math.abs(firstDistanceKm - request.targetDistanceKm)) selected = corrected
+        if (qualityOf(corrected).score < qualityOf(selected).score) selected = corrected
+      }
+      // Choose another road-following candidate rather than clipping the geometry.
+      // At most three router requests keep the public provider load and duration bounded.
+      if (!qualityOf(selected).acceptable) {
+        try {
+          const alternative = await routeSeed(1, 1)
+          if (qualityOf(alternative).score < qualityOf(selected).score) selected = alternative
+        } catch { /* Keep the last complete candidate and its explicit warning. */ }
       }
       const anchors = selected.anchors
       routed = selected.route
       const quality = evaluateRoundTrip(routed.geometry.coordinates as Coordinate[], explicit[0], routed.distance / 1000, request.targetDistanceKm)
-      if (!quality.acceptable) qualityWarning = [request.locale === 'de' ? 'Die Rundtour weicht von der Wunschdistanz ab. Setze einen Via-Punkt, um den Verlauf anzupassen.' : 'The round trip differs from the target distance. Add a via point to adjust its shape.']
+      if (quality.repeatedShare > .65 || quality.radialExcess > 1) throw new Error('ROUTE_QUALITY_FAILED')
+      if (!quality.acceptable) qualityWarning = [request.locale === 'de' ? 'Die Rundtour erreicht die gewünschte Distanz oder Schleifenqualität nicht vollständig. Prüfe den Verlauf und passe ihn mit einem Via-Punkt an.' : 'The round trip does not fully meet the requested distance or loop quality. Review its shape and adjust it with a via point.']
       generatedWaypoints = anchors.map((coordinate, index) => ({ id: `generated-fossgis-${index}`, coordinate, label: `Generated anchor ${index + 1}`, kind: 'generated' }))
     } else {
       const locations = request.mode === 'round-trip' ? [...explicit, explicit[0]] : explicit

@@ -1,0 +1,14 @@
+[
+  { "id": "basel-rhein", "region": "Basel", "profile": "road", "start": [7.5886, 47.5596], "end": [7.6405, 47.5870], "distanceKm": 40 },
+  { "id": "basel-city", "region": "Basel", "profile": "city", "start": [7.5886, 47.5596], "end": [7.6155, 47.5427], "distanceKm": 15 },
+  { "id": "aargau-touring", "region": "Aargau", "profile": "touring", "start": [8.0442, 47.3925], "end": [8.3051, 47.4733], "distanceKm": 50 },
+  { "id": "jura-gravel", "region": "Jura", "profile": "gravel", "start": [7.3440, 47.3650], "end": [7.0755, 47.4167], "distanceKm": 60 },
+  { "id": "jura-road", "region": "Jura", "profile": "road", "start": [7.3440, 47.3650], "end": [7.2304, 47.3008], "distanceKm": 45 },
+  { "id": "bern-city", "region": "Stadt", "profile": "city", "start": [7.4474, 46.9480], "end": [7.4636, 46.9379], "distanceKm": 10 },
+  { "id": "bern-touring", "region": "Stadt", "profile": "touring", "start": [7.4474, 46.9480], "end": [7.5424, 46.8790], "distanceKm": 35 },
+  { "id": "zurich-road", "region": "Stadt", "profile": "road", "start": [8.5417, 47.3769], "end": [8.5773, 47.2560], "distanceKm": 70 },
+  { "id": "alps-road", "region": "Alpen", "profile": "road", "start": [8.5940, 46.6338], "end": [8.5685, 46.6592], "distanceKm": 50 },
+  { "id": "alps-touring", "region": "Alpen", "profile": "touring", "start": [7.9885, 46.6863], "end": [7.9016, 46.6846], "distanceKm": 25 },
+  { "id": "ticino-gravel", "region": "Alpen", "profile": "gravel", "start": [8.7990, 46.1711], "end": [8.8114, 46.1817], "distanceKm": 30 },
+  { "id": "geneva-city", "region": "Stadt", "profile": "city", "start": [6.1432, 46.2044], "end": [6.1635, 46.2150], "distanceKm": 20 }
+]

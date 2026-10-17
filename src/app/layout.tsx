@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import localFont from 'next/font/local'
 import { PwaRegistration } from '@/components/pwa-registration'
 import './globals.css'
+import './workspace.css'
 
 const foundry = localFont({
   src: [

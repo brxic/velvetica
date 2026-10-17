@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { summarizeHealth, type HealthChecks } from './health'
+import { checkRouting, summarizeHealth, type HealthChecks } from './health'
+afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs() })
 
 const healthyChecks: HealthChecks = {
   routing: { status: 'up', latencyMs: 12 },
@@ -23,5 +24,10 @@ describe('summarizeHealth', () => {
     expect(summarizeHealth({ ...healthyChecks, cache: { status: 'down', latencyMs: 2_500 } })).toBe(
       'degraded',
     )
+  })
+  it('does not report a configured but unreachable public router as up', async () => {
+    vi.stubEnv('ROUTING_PROVIDER', 'fossgis')
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
+    expect((await checkRouting()).status).toBe('down')
   })
 })

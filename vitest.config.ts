@@ -2,7 +2,7 @@ import { defineConfig } from 'vitest/config'
 import path from 'node:path'
 
 export default defineConfig({
-  test: { environment: 'jsdom', setupFiles: ['./vitest.setup.ts'] },
+  test: { include: ['src/**/*.test.{ts,tsx}'], environment: 'jsdom', setupFiles: ['./vitest.setup.ts'], maxWorkers: 4 },
   resolve: { alias: { '@': path.resolve(__dirname, './src') } },
 })
 
