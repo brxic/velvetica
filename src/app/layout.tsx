@@ -1,8 +1,8 @@
 import type { Metadata, Viewport } from 'next'
 import localFont from 'next/font/local'
 import { PwaRegistration } from '@/components/pwa-registration'
+import { UiProvider } from '@/components/ui/button'
 import './globals.css'
-import './workspace.css'
 
 const foundry = localFont({
   src: [
@@ -23,6 +23,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  viewportFit: 'cover',
   colorScheme: 'light dark',
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#f5f5f3' },
@@ -31,5 +32,5 @@ export const viewport: Viewport = {
 }
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="de-CH" className={foundry.variable}><body>{children}<PwaRegistration /></body></html>
+  return <html lang="de-CH" className={foundry.variable}><body><UiProvider>{children}<PwaRegistration /></UiProvider></body></html>
 }

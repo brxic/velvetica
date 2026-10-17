@@ -6,6 +6,7 @@ import type { GeoJSONSource, Map as MapLibreMap, MapMouseEvent, Marker } from 'm
 import type { Coordinate, Locale, PlannedRoute, Waypoint } from '@/lib/domain'
 import { SWITZERLAND } from '@/lib/domain'
 import { analyzeRoute, gradeGradientStops } from '@/lib/route-analysis'
+import { mapInsets } from '@/lib/map-layout'
 
 type Props = {
   activeRoute: PlannedRoute | null
@@ -17,16 +18,16 @@ type Props = {
   activeProfileIndex: number | null
   onActiveProfileIndexChange: (index: number | null) => void
   locale: Locale
-  detailExpanded: boolean
   readOnly?: boolean
 }
 
 const emptyCollection = (): GeoJSON.FeatureCollection => ({ type: 'FeatureCollection', features: [] })
 
-export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onWaypointMove, onRouteShape, activeProfileIndex, onActiveProfileIndexChange, locale, detailExpanded, readOnly = false }: Props) {
+export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onWaypointMove, onRouteShape, activeProfileIndex, onActiveProfileIndexChange, locale, readOnly = false }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
-  const fittedGeometryRef = useRef('')
+  const fittedGeometryRef = useRef<PlannedRoute['geometry'] | null>(null)
+  const layoutUpdateRef = useRef<() => void>(() => {})
   const markersRef = useRef<Marker[]>([])
   const clickHandlerRef = useRef(onMapClick)
   const moveHandlerRef = useRef(onWaypointMove)
@@ -58,7 +59,6 @@ export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onW
       center: SWITZERLAND.center,
       zoom: SWITZERLAND.defaultZoom,
       attributionControl: false,
-      maxBounds: [[4.8, 44.8], [11.8, 48.5]],
     })
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'bottom-right')
     map.addControl(new maplibregl.AttributionControl({ compact: true, customAttribution: SWITZERLAND.attribution }), 'bottom-right')
@@ -152,17 +152,7 @@ export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onW
       } else activeSource?.setData(emptyCollection())
       const savedSource = map.getSource('saved-routes') as GeoJSONSource | undefined
       savedSource?.setData({ type: 'FeatureCollection', features: savedRoutes.filter((route) => route.id !== activeRoute?.id).map((route) => ({ type: 'Feature', properties: { id: route.id }, geometry: route.geometry })) })
-      const geometrySignature = activeRoute ? JSON.stringify(activeRoute.geometry) : ''
-      if (activeRoute && fittedGeometryRef.current !== geometrySignature) {
-        fittedGeometryRef.current = geometrySignature
-        const coordinates = activeRoute.geometry.coordinates
-        const bounds = coordinates.reduce((box, coordinate) => box.extend(coordinate as [number, number]), new maplibregl.LngLatBounds(coordinates[0] as [number, number], coordinates[0] as [number, number]))
-        const summaryHeight = document.querySelector('.route-summary, .shared-summary')?.getBoundingClientRect().height ?? 300
-        const padding = window.innerWidth <= 900
-          ? { top: 145, right: 28, bottom: Math.min(summaryHeight + 30, window.innerHeight * .6), left: 28 }
-          : { top: 150, right: 70, bottom: Math.min(summaryHeight + 30, window.innerHeight * .6), left: readOnly ? 60 : 390 }
-        map.fitBounds(bounds, { padding, duration: 800, maxZoom: 13 })
-      } else if (!activeRoute) fittedGeometryRef.current = ''
+      layoutUpdateRef.current()
     }
     if (map.getSource('active-route')) update(); else map.once('load', update)
     return () => { map.off('load', update) }
@@ -170,12 +160,65 @@ export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onW
 
   useEffect(() => {
     const map = mapRef.current
-    if (!map) return
-    const resize = () => map.resize()
-    const frame = window.requestAnimationFrame(resize)
-    const timer = window.setTimeout(resize, 280)
-    return () => { window.cancelAnimationFrame(frame); window.clearTimeout(timer) }
-  }, [detailExpanded])
+    const container = containerRef.current
+    const workspace = container?.parentElement
+    if (!map || !container || !workspace) return
+    let frame = 0
+    let previousLayout = ''
+    let previousOffset: [number, number] = [0, 0]
+    let mobileAttributionInitialized = false
+    const observed = new WeakSet<Element>()
+    const observer = new ResizeObserver(() => schedule())
+    const update = () => {
+      if (window.innerWidth <= 900 && !mobileAttributionInitialized) {
+        const attribution = container.querySelector<HTMLDetailsElement>('.maplibregl-ctrl-attrib')
+        if (attribution?.classList.contains('maplibregl-compact')) {
+          // Keep the standard attribution control available, initially compact on
+          // phones so its expanded text does not cover the editing controls.
+          attribution.classList.remove('maplibregl-compact-show')
+          attribution.removeAttribute('open')
+          mobileAttributionInitialized = true
+        }
+      }
+      const panels = [...workspace.querySelectorAll<HTMLElement>('.planner-panel, .route-summary, .shared-summary')]
+      const header = workspace.querySelector<HTMLElement>('.topbar')
+      for (const element of [...panels, ...(header ? [header] : [])]) if (!observed.has(element)) { observed.add(element); observer.observe(element) }
+      const padding = mapInsets(container.clientWidth, container.clientHeight, header?.getBoundingClientRect() ?? null, panels.map((panel) => panel.getBoundingClientRect()))
+      const layout = JSON.stringify(padding)
+      const offset: [number, number] = [(padding.left - padding.right) / 2, (padding.top - padding.bottom) / 2]
+      if (layout !== previousLayout) {
+        container.style.setProperty('--map-safe-bottom', `${padding.bottom}px`)
+        container.style.setProperty('--map-safe-right', `${padding.right}px`)
+        map.resize()
+      }
+      const route = activeRouteRef.current
+      if (route && map.getLayer('active-route-line') && (layout !== previousLayout || fittedGeometryRef.current !== route.geometry)) {
+        const coordinates = route.geometry.coordinates
+        const bounds = coordinates.reduce((box, coordinate) => box.extend(coordinate as [number, number]), new maplibregl.LngLatBounds(coordinates[0] as [number, number], coordinates[0] as [number, number]))
+        map.fitBounds(bounds, { padding, duration: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 250, maxZoom: 13 })
+        fittedGeometryRef.current = route.geometry
+      } else if (!route) {
+        fittedGeometryRef.current = null
+        // Keep the chosen region in the visible map area, not beneath the sheet.
+        if (layout !== previousLayout) {
+          const center = map.unproject([container.clientWidth / 2 + previousOffset[0], container.clientHeight / 2 + previousOffset[1]])
+          map.easeTo({ center, offset, duration: 0 })
+        }
+      }
+      previousOffset = offset
+      previousLayout = layout
+    }
+    function schedule() { window.cancelAnimationFrame(frame); frame = window.requestAnimationFrame(update) }
+    function loaded() { previousLayout = ''; schedule() }
+    layoutUpdateRef.current = schedule
+    const mutations = new MutationObserver(schedule)
+    mutations.observe(workspace, { childList: true, attributes: true, attributeFilter: ['class'] })
+    observer.observe(container)
+    map.on('load', loaded)
+    map.on('idle', schedule)
+    schedule()
+    return () => { layoutUpdateRef.current = () => {}; observer.disconnect(); mutations.disconnect(); map.off('load', loaded); map.off('idle', schedule); window.cancelAnimationFrame(frame) }
+  }, [readOnly])
 
   useEffect(() => {
     const map = mapRef.current

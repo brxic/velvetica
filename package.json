@@ -19,6 +19,7 @@
     "test:integration": "node scripts/run-database-qa.mjs"
   },
   "dependencies": {
+    "@base-ui/react": "1.9.0",
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.112.3",
     "@turf/along": "^7.2.0",

@@ -9,8 +9,8 @@ async function openPlanner(page: Page) {
 async function searchStart(page: Page) {
   await page.route('**/api/places/search?**', (route) => route.fulfill({ json: { results: [{ label: 'Basel, Schweiz', coordinate: [7.5886, 47.5596] }] } }))
   // Search's API shape is deliberately verified by choosing a rendered result.
-  await page.getByRole('textbox', { name: 'Startort suchen' }).fill('Basel')
-  await page.getByRole('button', { name: 'Basel, Schweiz', exact: true }).click()
+  await page.getByRole('combobox', { name: 'Startort suchen' }).fill('Basel')
+  await page.getByRole('option', { name: 'Basel, Schweiz', exact: true }).click()
 }
 
 test('GPX import → rename → local save → reopen → export; responsive details', async ({ page }, testInfo) => {
@@ -44,7 +44,7 @@ test('one-way hides distance; planning failure keeps input and offers a retry', 
   await openPlanner(page)
   await page.getByRole('button', { name: 'One-Way', exact: true }).click()
   await expect(page.getByRole('slider', { name: /Distanz/ })).toHaveCount(0)
-  await expect(page.getByRole('textbox', { name: 'Zielort suchen' })).toBeVisible()
+  await expect(page.getByRole('combobox', { name: 'Zielort suchen' })).toBeVisible()
   await page.getByRole('button', { name: 'Rundtour', exact: true }).click()
   await searchStart(page)
   await page.getByRole('button', { name: 'Route planen', exact: true }).click()
@@ -52,8 +52,8 @@ test('one-way hides distance; planning failure keeps input and offers a retry', 
   const toggle = page.getByRole('button', { name: 'Planungsmenü öffnen' })
   if (await toggle.isVisible()) await toggle.click()
   await page.route('**/api/routes/plan', (route) => route.fulfill({ status: 422, json: { code: 'ROUTE_FAILED' } }))
-  page.once('dialog', (dialog) => dialog.accept())
   await page.getByRole('button', { name: 'Route planen', exact: true }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Entwurf verwerfen' }).click()
   await expect(page.getByRole('status')).toContainText('nicht berechnet')
   await expect(page.getByRole('textbox', { name: 'Routenname', exact: true })).toBeVisible()
 })

@@ -1,13 +1,14 @@
 'use client'
 
 import type { User } from '@supabase/supabase-js'
+import { Input } from './ui/input'
 import { Check, Cloud, LockKeyhole, LogIn, LogOut, Mail, UserRound, X } from 'lucide-react'
 import { type FormEvent, useEffect, useState } from 'react'
 import type { Locale } from '@/lib/domain'
 import { announceAuthState } from '@/lib/auth-client'
 import { getBrowserSupabase } from '@/lib/supabase/browser'
 import { AccountSettings } from './account-settings'
-import { useDialogFocus } from './dialog-focus'
+import { AppDialog } from './ui/dialog'
 
 type AuthView = 'sign-in' | 'sign-up' | 'forgot-password' | 'update-password'
 type Notice = { text: string; tone: 'success' | 'error' }
@@ -25,7 +26,6 @@ export function AccountMenu({ locale }: { locale: Locale }) {
   const [pending, setPending] = useState(false)
   const [notice, setNotice] = useState<Notice | null>(null)
   const de = locale === 'de'
-  const dialogRef = useDialogFocus(open, () => setOpen(false))
 
   useEffect(() => {
     if (!supabase) return
@@ -163,8 +163,7 @@ export function AccountMenu({ locale }: { locale: Locale }) {
     <button className={`icon-button account-button ${user ? 'is-authenticated' : ''}`} onClick={() => setOpen(true)} aria-label={user ? (de ? 'Konto öffnen' : 'Open account') : (de ? 'Anmelden' : 'Sign in')}>
       {user ? <UserRound size={18} /> : <LogIn size={18} />}<span>{user ? (de ? 'Konto' : 'Account') : (de ? 'Anmelden' : 'Sign in')}</span>
     </button>
-    {open && <div className="account-backdrop" onClick={() => setOpen(false)}>
-      <section ref={dialogRef} className={`account-dialog ${user && !isUpdatingPassword ? 'has-settings' : ''}`} role="dialog" aria-modal="true" aria-labelledby="account-title" onClick={(event) => event.stopPropagation()}>
+    <AppDialog open={open} onOpenChange={setOpen} label={title} className={`account-dialog ${user && !isUpdatingPassword ? 'has-settings' : ''}`}>
         <button type="button" className="icon-button account-close" onClick={() => setOpen(false)} aria-label={de ? 'Schliessen' : 'Close'}><X size={18} /></button>
         <div className="account-icon">{user && !isUpdatingPassword ? <UserRound /> : <Cloud />}</div>
         <p className="eyebrow">Velvetia Cloud</p>
@@ -200,7 +199,7 @@ export function AccountMenu({ locale }: { locale: Locale }) {
           <p>{de ? 'Melde dich mit deiner E-Mail-Adresse und deinem Passwort an.' : 'Sign in with your email address and password.'}</p>
           <form className="account-form" onSubmit={(event) => void signIn(event)}>
             <EmailField email={email} setEmail={setEmail} de={de} />
-            <label><span>{de ? 'Passwort' : 'Password'}</span><div><LockKeyhole size={17} /><input type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} /></div></label>
+            <label><span>{de ? 'Passwort' : 'Password'}</span><div><LockKeyhole size={17} /><Input type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} /></div></label>
             <button className="primary-button account-submit" disabled={pending}>{pending ? (de ? 'Anmeldung läuft …' : 'Signing in …') : (de ? 'Anmelden' : 'Sign in')}</button>
           </form>
           <div className="account-links">
@@ -210,19 +209,18 @@ export function AccountMenu({ locale }: { locale: Locale }) {
           <small>{de ? 'Deine bisherigen anonymen Routen werden beim ersten Login automatisch übernommen.' : 'Your existing anonymous routes are transferred automatically on first sign-in.'}</small>
         </>}
         {notice && <div className={`account-message ${notice.tone === 'error' ? 'is-error' : ''}`} role="status" aria-live="polite">{notice.text}</div>}
-      </section>
-    </div>}
+    </AppDialog>
   </>
 }
 
 function EmailField({ email, setEmail, de }: { email: string; setEmail: (value: string) => void; de: boolean }) {
-  return <label><span>{de ? 'E-Mail-Adresse' : 'Email address'}</span><div><Mail size={17} /><input type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@beispiel.ch" /></div></label>
+  return <label><span>{de ? 'E-Mail-Adresse' : 'Email address'}</span><div><Mail size={17} /><Input type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@beispiel.ch" /></div></label>
 }
 
 function PasswordFields({ password, setPassword, passwordConfirmation, setPasswordConfirmation, de }: { password: string; setPassword: (value: string) => void; passwordConfirmation: string; setPasswordConfirmation: (value: string) => void; de: boolean }) {
   return <>
-    <label><span>{de ? 'Passwort' : 'Password'}</span><div><LockKeyhole size={17} /><input type="password" autoComplete="new-password" minLength={MIN_PASSWORD_LENGTH} required value={password} onChange={(event) => setPassword(event.target.value)} /></div></label>
-    <label><span>{de ? 'Passwort wiederholen' : 'Confirm password'}</span><div><LockKeyhole size={17} /><input type="password" autoComplete="new-password" minLength={MIN_PASSWORD_LENGTH} required value={passwordConfirmation} onChange={(event) => setPasswordConfirmation(event.target.value)} /></div></label>
+    <label><span>{de ? 'Passwort' : 'Password'}</span><div><LockKeyhole size={17} /><Input type="password" autoComplete="new-password" minLength={MIN_PASSWORD_LENGTH} required value={password} onChange={(event) => setPassword(event.target.value)} /></div></label>
+    <label><span>{de ? 'Passwort wiederholen' : 'Confirm password'}</span><div><LockKeyhole size={17} /><Input type="password" autoComplete="new-password" minLength={MIN_PASSWORD_LENGTH} required value={passwordConfirmation} onChange={(event) => setPasswordConfirmation(event.target.value)} /></div></label>
   </>
 }
 
