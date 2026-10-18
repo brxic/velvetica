@@ -7,6 +7,7 @@ async function ready(page: Page) {
 }
 
 test('an active ride defers a real PWA update even after the route is saved', async ({ page, request }) => {
+  await page.setViewportSize({ width: 390, height: 667 })
   await page.addInitScript(() => Object.defineProperty(navigator, 'geolocation', { configurable: true, value: { watchPosition: () => 1, clearWatch: () => {} } }))
   await ready(page)
   await page.getByLabel('GPX-Datei auswählen').setInputFiles('test-fixtures/bern-import.gpx')

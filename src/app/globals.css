@@ -341,12 +341,19 @@ button:active:not(:disabled) { transform: none; }
 .planner-panel:not(.is-open) { display: none; }
 .planner-sheet-head, .mobile-app-menu { display: none; }
 .planner-scroll-frame, .planner-scroll { display: contents; }
+.editor-summary-scroll-frame, .editor-summary-scroll, .waypoint-scroll-frame, .waypoint-scroll { display: contents; }
 .planning-supply { margin-top: var(--space-4); padding-block: var(--space-3); border-top: 1px solid var(--line); }
 .planning-supply-toggle { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: var(--text-sm); cursor: pointer; }
 .planning-supply-toggle > svg { color: var(--muted); flex: none; }
 .planning-supply-toggle > input { width: 20px; height: 20px; margin-left: auto; accent-color: var(--red); }
 .planning-supply p { margin: 8px 0 0; font-size: var(--text-xs); color: var(--muted); }
-.planning-supply .supply-filters { margin-top: 8px; flex-wrap: wrap; }
+.supply-category-picker { display: grid; gap: 2px; margin: 8px 0 12px; }
+.supply-category-picker > button { appearance: none; display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 10px; border: 1px solid transparent; border-radius: var(--radius-control); background: transparent; color: var(--muted); text-align: left; font-size: var(--text-sm); cursor: pointer; }
+.supply-category-picker > button:hover { background: var(--card-soft); color: var(--ink); }
+.supply-category-picker > button[aria-pressed="true"] { color: var(--ink); background: var(--card-soft); }
+.supply-category-picker > button > svg { flex: none; }
+.supply-category-check { margin-left: auto; flex: none; width: 18px; height: 18px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 4px; background: var(--card); }
+[aria-pressed="true"] > .supply-category-check { border-color: var(--red); background: var(--red); color: #fff; }
 .planner-footer { position: sticky; bottom: calc(-1 * var(--space-5)); z-index: 2; margin: var(--space-4) calc(-1 * var(--space-5)) calc(-1 * var(--space-5)); padding: var(--space-3) var(--space-5) var(--space-5); border-top: 1px solid var(--line); background: var(--card); }
 .plan-button { width: 100%; margin: 0; }
 .place-positioner { z-index: var(--layer-popover); width: var(--anchor-width); max-width: calc(100vw - 24px); }
@@ -423,9 +430,6 @@ button[aria-busy="true"] { cursor: progress; }
 .has-supply-panel .route-summary { display: none; }
 .supply-panel .dialog-heading h2 { font-size: 24px; }
 .supply-panel .dialog-heading { flex: none; }
-.supply-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
-.supply-filters > button { font-size: var(--text-xs); padding-inline: 8px; }
-.supply-filters [aria-pressed="true"] { background: var(--card-soft); border-color: var(--ink); }
 .supply-layer { display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: var(--text-sm); }
 .supply-layer input { width: 18px; height: 18px; accent-color: var(--action); }
 .supply-content { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; border-block: 1px solid var(--line); padding-block: 12px; }
@@ -545,6 +549,14 @@ button[aria-busy="true"] { cursor: progress; }
   .route-edit-hint .secondary-button, .route-edit-hint .primary-button { padding-inline: 10px; }
   .ui-dialog-viewport--sheet { padding: 0; align-items: end; }
   .ui-dialog.route-detail-dialog, .ui-dialog.waypoint-dialog { width: 100%; max-height: calc(var(--app-height, 100dvh) - 32px - env(safe-area-inset-top, 0px)); padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px)); border-radius: var(--radius-panel) var(--radius-panel) 0 0; }
+  .is-editing .route-summary { display: flex; flex-direction: column; height: min(60dvh, calc(var(--app-height, 100dvh) - 180px)); padding: 0; overflow: hidden; }
+  .is-editing .route-summary.is-peek { height: 66px; }
+  .has-waypoint-editor .route-summary { display: none; }
+  .is-editing .editor-summary-scroll-frame, .waypoint-scroll-frame { display: flex; min-height: 0; flex: 1; padding-top: 16px; overflow: hidden; }
+  .is-editing .editor-summary-scroll, .waypoint-scroll { display: block; min-height: 0; flex: 1; padding: 0 16px calc(16px + env(safe-area-inset-bottom, 0px)); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+  .is-peek .editor-summary-scroll-frame, .is-peek .waypoint-scroll-frame { visibility: hidden; }
+  .ui-dialog.waypoint-dialog { display: flex; flex-direction: column; margin: 0; height: min(72dvh, calc(var(--app-height, 100dvh) - 150px)); max-height: none; padding: 0; overflow: hidden; }
+  .ui-dialog.waypoint-dialog.is-peek { height: calc(66px + env(safe-area-inset-bottom, 0px)); }
   .route-detail-dialog .elevation-card svg { height: 140px; }
   .workspace-notice { top: calc(var(--workspace-top) + 52px); }
   .font-credit { display: none; }
@@ -581,6 +593,7 @@ button[aria-busy="true"] { cursor: progress; }
 }
 @media (max-height: 600px) and (min-width: 600px) and (max-width: 900px) {
   .is-editing .route-edit-hint { width: min(360px, 47vw); }
+  .ui-dialog.waypoint-dialog { width: min(360px, 47vw); height: calc(var(--app-height, 100dvh) - var(--workspace-top) - 64px); margin: 0 auto 0 var(--workspace-gap); }
   .planner-panel { left: var(--workspace-gap); width: min(360px, 47vw); }
   .route-summary { left: auto; right: 12px; width: min(400px, 49vw); }
   .route-summary .route-actions { margin-top: 8px; }

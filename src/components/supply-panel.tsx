@@ -2,10 +2,11 @@
 
 import { ArrowLeft, Coffee, Droplets, MapPin, ShoppingBasket, X } from 'lucide-react'
 import type { Locale, PlannedRoute } from '@/lib/domain'
-import { poiName, supplyLabels, type SupplyCategory } from '@/lib/supply'
+import { poiName, supplyLabels } from '@/lib/supply'
 import type { useSupply } from './use-supply'
 import { AppDialog } from './ui/dialog'
 import { Button } from './ui/button'
+import { SupplyCategoryPicker } from './supply-category-picker'
 
 const icons = { water: Droplets, food: Coffee, shop: ShoppingBasket }
 export function SupplyPanel({ supply, locale, open, onAccept, onEditStops, canUndo, onUndo }: { supply: ReturnType<typeof useSupply>; locale: Locale; open: boolean; onAccept: (route: PlannedRoute) => void; onEditStops: () => void; canUndo: boolean; onUndo: () => void }) {
@@ -13,7 +14,7 @@ export function SupplyPanel({ supply, locale, open, onAccept, onEditStops, canUn
   const date = (value: string) => new Date(value).toLocaleDateString(de ? 'de-CH' : 'en-GB')
   return <AppDialog open={open} onOpenChange={(value) => { if (!value) supply.close() }} label={de ? 'Versorgung entlang der Route' : 'Supplies along the route'} className="supply-panel" placement="end" modal={false} finalFocus={() => document.querySelector<HTMLButtonElement>('.supply-toggle') ?? true}>
     <div className="dialog-heading"><div><h2>{de ? 'Versorgung' : 'Supplies'}</h2><p className="editor-explanation">{de ? 'Bis 500 m neben deiner Route. Nicht vollständig.' : 'Within 500 m of your route. Not a complete inventory.'}</p></div><Button variant="icon" aria-label={de ? 'Schliessen' : 'Close'} onClick={supply.close}><X size={18} /></Button></div>
-    {!selected && <><div className="supply-filters" aria-label={de ? 'Kategorien' : 'Categories'}>{(['water', 'food', 'shop'] as SupplyCategory[]).map((category) => { const Icon = icons[category]; return <Button key={category} aria-label={supplyLabels[locale][category]} aria-pressed={supply.categories.includes(category)} onClick={() => supply.toggleCategory(category)}><Icon size={17} />{category === 'food' ? (de ? 'Essen' : 'Food') : supplyLabels[locale][category]}</Button> })}</div>
+    {!selected && <><SupplyCategoryPicker locale={locale} selected={supply.categories} onToggle={supply.toggleCategory} />
     <label className="supply-layer"><input type="checkbox" checked={supply.enabled} onChange={(event) => supply.setEnabled(event.target.checked)} />{de ? 'Auf der Karte anzeigen' : 'Show on map'}</label></>}
     <div className="supply-content" aria-busy={supply.loading}>
       {supply.loading && <p role="status">{de ? 'Versorgung wird gesucht …' : 'Looking for supplies …'}</p>}

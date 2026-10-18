@@ -36,7 +36,8 @@ import { useSupply } from './use-supply'
 import { SupplyPanel } from './supply-panel'
 import { PlannerPanel } from './planner-panel'
 import { MobileAppMenu } from './mobile-app-menu'
-import { supplyLabels, type SupplyCategory } from '@/lib/supply'
+import { SupplyCategoryPicker } from './supply-category-picker'
+import { MapSheetHeader, useMapSheet } from './map-sheet'
 
 const LEGACY_STORAGE_KEY = 'velvetia.saved-routes.v1'
 const STORAGE_KEY_PREFIX = 'velvetia.saved-routes.v2'
@@ -75,6 +76,7 @@ function ensureEditableAnchors(route: PlannedRoute) {
 export function PlannerApp() {
   useVisualViewport()
   const ride = useRideSession()
+  const stopRide = ride.stop
   const [rideSetup, setRideSetup] = useState(false)
   const [locale, setLocale] = useState<Locale>('de'); const copy = t(locale)
   const localeRef = useRef(locale)
@@ -104,10 +106,10 @@ export function PlannerApp() {
   const [compactViewport, setCompactViewport] = useState(false)
   useEffect(() => {
     const query = window.matchMedia('(max-width: 900px)')
-    const update = () => setCompactViewport(query.matches)
+    const update = () => { setCompactViewport(query.matches); if (!query.matches) { stopRide(); setRideSetup(false) } }
     update(); query.addEventListener('change', update)
     return () => query.removeEventListener('change', update)
-  }, [])
+  }, [stopRide])
   const [savedSearch, setSavedSearch] = useState('')
   const [savedProfile, setSavedProfile] = useState('all')
   const [favoritesOnly, setFavoritesOnly] = useState(false)
@@ -127,6 +129,7 @@ export function PlannerApp() {
   const [routeDetailsExpanded, setRouteDetailsExpanded] = useState(false)
   const [editingRouteId, setEditingRouteId] = useState<string | null>(null)
   const editing = Boolean(route && editingRouteId === route.id)
+  const editorSheet = useMapSheet(compactViewport && editing)
   const supply = useSupply(route, preferences, locale)
   const supplyVisible = Boolean(route && supply.open && !plannerOpen && !editing && !ride.route && !showSaved && !rideSetup && !routeDetailsExpanded)
   const [stopSnapshots, setStopSnapshots] = useState(new Map<string, PlannedRoute>())
@@ -581,7 +584,7 @@ export function PlannerApp() {
     return () => window.removeEventListener('keydown', escape)
   }, [editing, isPlanning])
 
-  return <main id="planner" className={`app-shell theme-${theme} ${ride.route ? 'is-riding' : ''} ${editing ? 'is-editing' : ''} ${supplyVisible ? 'has-supply-panel' : ''} ${plannerOpen ? 'has-planner' : ''} ${route && routeDetailsExpanded && !compactViewport ? 'has-expanded-route' : ''}`}>
+  return <main id="planner" className={`app-shell theme-${theme} ${ride.route ? 'is-riding' : ''} ${editing ? 'is-editing' : ''} ${editing && waypointEditorOpen ? 'has-waypoint-editor' : ''} ${supplyVisible ? 'has-supply-panel' : ''} ${plannerOpen ? 'has-planner' : ''} ${route && routeDetailsExpanded && !compactViewport ? 'has-expanded-route' : ''}`}>
     <a href="#planner-controls" className="skip-link">{locale === 'de' ? 'Zur Routenplanung' : 'Skip to route planning'}</a>
     <MapCanvas theme={theme} activeRoute={ride.route ?? (supplyVisible ? supply.quote?.value?.route : null) ?? route} comparisonRoute={supplyVisible && supply.quote?.value ? route : null} savedRoutes={savedRoutes} waypoints={ride.route?.waypoints ?? (supplyVisible ? supply.quote?.value?.route.waypoints : undefined) ?? waypoints} onMapClick={handleMapClick} onWaypointMove={handleWaypointMove} onRouteShape={handleRouteShape} activeProfileIndex={supplyVisible && supply.quote?.value ? null : activeProfileIndex} onActiveProfileIndexChange={setActiveProfileIndex} locale={locale} riding={Boolean(ride.route)} rideFix={ride.fresh ? ride.fix : null} following={ride.following} onFollowChange={ride.setFollowing} editing={editing || !route} onWaypointSelect={openWaypointEditor} supplyPois={supply.enabled && !editing && !ride.route ? supply.result?.pois : undefined} onSupplySelect={supply.select} />
     <RidePanel session={ride} locale={locale} />
@@ -663,7 +666,7 @@ export function PlannerApp() {
       </div>}
       <section className="planning-supply" aria-label={locale === 'de' ? 'Verpflegung' : 'Supplies'}>
         <label className="planning-supply-toggle"><Droplets size={18} /><span>{locale === 'de' ? 'Verpflegung auf der Karte' : 'Supplies on the map'}</span><input type="checkbox" checked={supply.enabled} onChange={(event) => supply.setEnabled(event.target.checked)} /></label>
-        {supply.enabled && <><div className="supply-filters">{(['water', 'food', 'shop'] as SupplyCategory[]).map((category) => <button key={category} type="button" aria-pressed={supply.categories.includes(category)} onClick={() => supply.toggleCategory(category)}>{supplyLabels[locale][category]}</button>)}</div><p>{route ? (locale === 'de' ? 'Orte entlang der aktuellen Route.' : 'Places along the current route.') : (locale === 'de' ? 'Wird nach der Routenberechnung angezeigt.' : 'Shown once your route has been calculated.')}</p>{route && <Button variant="text" onClick={() => { setPlannerOpen(false); setRouteDetailsExpanded(false); supply.show() }}>{locale === 'de' ? 'Orte und Zwischenstopps ansehen' : 'View places and stops'}</Button>}</>}
+        {supply.enabled && <><SupplyCategoryPicker locale={locale} selected={supply.categories} onToggle={supply.toggleCategory} /><p>{route ? (locale === 'de' ? 'Orte entlang der aktuellen Route.' : 'Places along the current route.') : (locale === 'de' ? 'Wird nach der Routenberechnung angezeigt.' : 'Shown once your route has been calculated.')}</p>{route && <Button variant="text" onClick={() => { setPlannerOpen(false); setRouteDetailsExpanded(false); supply.show() }}>{locale === 'de' ? 'Orte und Zwischenstopps ansehen' : 'View places and stops'}</Button>}</>}
       </section>
       <div className="planner-footer">
       <Button variant="primary" className="plan-button" onClick={planRoute} disabled={isPlanning}>{isPlanning ? <><span className="spinner" />{copy.planning}</> : <><Sparkles size={19} />{copy.calculate}</>}</Button>
@@ -671,7 +674,9 @@ export function PlannerApp() {
       </div>
     </PlannerPanel>
 
-    {route && <section className={`route-summary ${routeDetailsExpanded && !compactViewport ? 'is-expanded' : ''}`} aria-label={locale === 'de' ? 'Routenzusammenfassung' : 'Route summary'}>
+    {route && <section className={`route-summary ${routeDetailsExpanded && !compactViewport ? 'is-expanded' : ''} ${editorSheet.collapsed ? 'is-peek' : ''}`} style={editorSheet.style} aria-label={locale === 'de' ? 'Routenzusammenfassung' : 'Route summary'}>
+      {editing && <MapSheetHeader sheet={editorSheet} title={locale === 'de' ? 'Route bearbeiten' : 'Edit route'} subject={locale === 'de' ? 'Bearbeitung' : 'Editing'} contentId="editor-summary-scroll" locale={locale} />}
+      <div className="editor-summary-scroll-frame"><div id="editor-summary-scroll" className="editor-summary-scroll" inert={editorSheet.collapsed}>
       <div className="route-summary-head"><div>
         <div className="route-title-edit"><input id="route-name" className="route-name-input" value={route.name} maxLength={80} required aria-invalid={!route.name.trim()} aria-describedby={!route.name.trim() ? 'route-name-error' : undefined} aria-label={locale === 'de' ? 'Routenname' : 'Route name'} onBlur={(event) => { event.currentTarget.scrollLeft = 0 }} onChange={(event) => setRoute({ ...route, name: event.target.value })} /><Pencil size={15} aria-hidden="true" /></div>
         {!route.name.trim() && <p id="route-name-error" className="field-error">{locale === 'de' ? 'Gib der Route einen Namen, bevor du sie speicherst.' : 'Name the route before saving it.'}</p>}
@@ -684,11 +689,12 @@ export function PlannerApp() {
       </div></div>
       {showRouteDetails && <RouteDetails route={route} locale={locale} speedKmh={speedKmh} activeIndex={activeProfileIndex} onActiveIndexChange={setActiveProfileIndex} condensed={!routeDetailsExpanded || compactViewport} focusWarnings={focusWarnings && !compactViewport} />}
       {!routeDetailsExpanded && route.warnings.length > 0 && <button className="route-warning-summary" onClick={openWarnings}>{locale === 'de' ? `${route.warnings.length} ${route.warnings.length === 1 ? 'Hinweis' : 'Hinweise'} zur Route · in den Details prüfen` : `${route.warnings.length} route ${route.warnings.length === 1 ? 'note' : 'notes'} · review in details`}</button>}
-      <RouteActions key={route.id} route={route} locale={locale} saving={saving} saved={Boolean(persistedRoute)} canShare={Boolean(persistedRoute?.serverVersion && accountAuthenticated)} onSave={saveRoute} onReset={reset} onRide={() => setRideSetup(true)} />
+      <RouteActions key={route.id} route={route} locale={locale} saving={saving} saved={Boolean(persistedRoute)} canShare={Boolean(persistedRoute?.serverVersion && accountAuthenticated)} onSave={saveRoute} onReset={reset} onRide={compactViewport ? () => setRideSetup(true) : undefined} />
       {syncConflict && <button className="account-link" onClick={() => window.location.reload()}>{locale === 'de' ? 'Aktuellen Serverstand neu laden (lokale Änderungen vorher als Kopie speichern)' : 'Reload server version (save local changes as a copy first)'}</button>}
+      </div></div>
     </section>}
 
-    <AppDialog open={rideSetup} onOpenChange={setRideSetup} label={locale === 'de' ? 'Fahrt vorbereiten' : 'Prepare your ride'} finalFocus={() => ride.route ? document.getElementById('ride-exit') : true}>
+    <AppDialog open={rideSetup && compactViewport} onOpenChange={setRideSetup} label={locale === 'de' ? 'Fahrt vorbereiten' : 'Prepare your ride'} finalFocus={() => ride.route ? document.getElementById('ride-exit') : true}>
       <div className="dialog-heading"><h2>{locale === 'de' ? 'Fahrt vorbereiten' : 'Prepare your ride'}</h2><Button variant="icon" onClick={() => setRideSetup(false)} aria-label={locale === 'de' ? 'Schliessen' : 'Close'}><X size={18} /></Button></div>
       <p className="ride-setup-copy">{locale === 'de' ? 'Zeige deinen Standort und den Fortschritt auf dieser Route. Dein Live-Standort bleibt in dieser Sitzung und wird nicht an Velvetia übertragen.' : 'Show your location and progress on this route. Your live location stays in this session and is not sent to Velvetia.'}</p>
       <p className="ride-setup-copy">{locale === 'de' ? 'Es gibt noch keine Abbiegehinweise oder automatische Neuberechnung. Bei gesperrtem Bildschirm oder im Hintergrund kann GPS aussetzen. Zum Bedienen anhalten.' : 'Turn-by-turn directions and automatic rerouting are not available. GPS may stop when the screen locks or the app is in the background. Stop before using controls.'}</p>
@@ -724,7 +730,7 @@ export function PlannerApp() {
     {showGuide && !recovery.pending && <Onboarding onClose={closeGuide} locale={locale} />}
     {notice && <div className="workspace-notice" role="status"><span>{notice}</span><button onClick={() => setNotice(null)} aria-label={locale === 'de' ? 'Hinweis schliessen' : 'Dismiss notice'}><X size={17} /></button></div>}
 
-    {route && editing && <WaypointEditor key={route.id} open={waypointEditorOpen} onOpenChange={setWaypointEditorOpen} locale={locale} waypoints={waypoints} selectedId={selectedWaypointId} onSelect={setSelectedWaypointId} busy={isPlanning} notice={notice} onChange={changeEditorPoint} onAdd={addEditorPoint} onRemove={removeWaypoint} onReorder={reorderEditorPoint} />}
+    {route && editing && <WaypointEditor key={`${route.id}:${waypointEditorOpen}`} open={waypointEditorOpen} compact={compactViewport} onOpenChange={setWaypointEditorOpen} locale={locale} waypoints={waypoints} selectedId={selectedWaypointId} onSelect={setSelectedWaypointId} busy={isPlanning} notice={notice} onChange={changeEditorPoint} onAdd={addEditorPoint} onRemove={removeWaypoint} onReorder={reorderEditorPoint} />}
     {route && <SupplyPanel supply={supply} locale={locale} open={supplyVisible} onAccept={acceptSupplyStop} canUndo={canUndoStop} onUndo={() => { supply.close(); undoWaypoints() }} onEditStops={() => { supply.close(); startEditing(); openWaypointEditor(route.waypoints.find((point) => point.id.startsWith('supply-'))?.id) }} />}
     {confirmation}
     <footer className="font-credit">Fonts made from <a href="http://www.onlinewebfonts.com" target="_blank" rel="noreferrer">Web Fonts</a> is licensed by CC BY 4.0</footer>

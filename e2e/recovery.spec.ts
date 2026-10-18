@@ -93,10 +93,22 @@ test('a late routing response cannot replace a newer map edit', async ({ page })
   })
   await page.locator('.map-marker--start').waitFor()
   const canvas = page.locator('.maplibregl-canvas')
-  const width = page.viewportSize()!.width
-  await canvas.click({ position: { x: width * .75, y: 180 } })
+  // Responsive panel insets change marker positions. Target genuinely open map,
+  // not a fixed screen coordinate that can now be the destination marker.
+  async function clickOpenMap() {
+    const position = await canvas.evaluate((element) => {
+      const bounds = element.getBoundingClientRect()
+      for (const y of [180, 205, 230]) for (const ratio of [.75, .65, .5, .85]) {
+        const x = bounds.left + bounds.width * ratio
+        if (document.elementFromPoint(x, bounds.top + y) === element) return { x: bounds.width * ratio, y }
+      }
+      throw new Error('No unobstructed map point found')
+    })
+    await canvas.click({ position })
+  }
+  await clickOpenMap()
   await expect.poll(() => count).toBe(1)
-  await canvas.click({ position: { x: width * .65, y: 205 } })
+  await clickOpenMap()
   await expect.poll(() => count).toBe(2)
   await expect(page.getByText('12 km', { exact: true })).toBeVisible()
   releaseFirst()

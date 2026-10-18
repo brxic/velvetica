@@ -275,7 +275,7 @@ export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onW
           mobileAttributionInitialized = true
         }
       }
-      const panels = [...workspace.querySelectorAll<HTMLElement>('.planner-panel, .route-summary, .shared-summary, .ride-panel'), ...document.querySelectorAll<HTMLElement>('.supply-panel')]
+      const panels = [...workspace.querySelectorAll<HTMLElement>('.planner-panel, .route-summary, .shared-summary, .ride-panel'), ...document.querySelectorAll<HTMLElement>('.supply-panel, .waypoint-dialog')]
       const header = workspace.querySelector<HTMLElement>(ridingRef.current ? '.ride-header' : '.topbar')
       const toolbar = ridingRef.current ? null : workspace.querySelector<HTMLElement>('.route-edit-hint')
       for (const element of [...panels, ...(header ? [header] : []), ...(toolbar ? [toolbar] : [])]) if (!observed.has(element)) { observed.add(element); observer.observe(element) }

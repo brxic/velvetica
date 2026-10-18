@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
+test.skip(({ isMobile }) => !isMobile, 'Ride mode is available only on mobile layouts')
+
 async function prepare(page: Page, denied = false) {
   await page.addInitScript(({ denied, theme }) => {
     localStorage.setItem('velvetia.guide-seen.v1', 'true')
@@ -81,6 +83,16 @@ test('blocked GPS stays actionable and never claims route progress', async ({ pa
   await expect(panel.getByRole('button', { name: 'GPS erneut versuchen' })).toBeVisible()
   await page.getByRole('button', { name: 'Fahrmodus beenden' }).click()
   await expect(panel).not.toBeVisible()
+})
+
+test('switching to desktop ends the mobile ride and releases the location watcher', async ({ page }) => {
+  await prepare(page)
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __rideQa: { callbacks: Map<number, unknown> } }).__rideQa.callbacks.size)).toBe(1)
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await expect(page.getByRole('region', { name: 'Fahrtübersicht' })).not.toBeVisible()
+  expect(await page.evaluate(() => (window as unknown as { __rideQa: { callbacks: Map<number, unknown> } }).__rideQa.callbacks.size)).toBe(0)
+  await expect(page.getByRole('button', { name: 'Fahrmodus', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('textbox', { name: 'Routenname', exact: true })).toHaveValue('Bern Testfahrt')
 })
 
 test('short landscape keeps GPS errors, exit and controls reachable', async ({ page }, info) => {
