@@ -34,6 +34,9 @@ import { usePanelBack } from './use-panel-back'
 import { useVisualViewport } from './use-visual-viewport'
 import { useSupply } from './use-supply'
 import { SupplyPanel } from './supply-panel'
+import { PlannerPanel } from './planner-panel'
+import { MobileAppMenu } from './mobile-app-menu'
+import { supplyLabels, type SupplyCategory } from '@/lib/supply'
 
 const LEGACY_STORAGE_KEY = 'velvetia.saved-routes.v1'
 const STORAGE_KEY_PREFIX = 'velvetia.saved-routes.v2'
@@ -596,8 +599,9 @@ export function PlannerApp() {
         <AccountMenu locale={locale} />
         <button className="icon-button mobile-saved-button" onClick={() => setShowSaved(true)} aria-label={copy.saved}><Bookmark size={18} /><span className="count">{savedRoutes.length}</span></button>
         <button className="icon-button labelled" onClick={() => setShowGuide(true)}><CircleHelp size={19} /><span>{copy.guide}</span></button>
-        <Button variant="icon" onClick={toggleTheme} aria-label={theme === 'light' ? (locale === 'de' ? 'Dunkles Design' : 'Dark theme') : (locale === 'de' ? 'Helles Design' : 'Light theme')}>{theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}</Button>
-        <Button variant="icon" onClick={() => setLocale(locale === 'de' ? 'en' : 'de')} aria-label={locale === 'de' ? 'Sprache wechseln' : 'Switch language'}><Languages size={19} /><b>{locale.toUpperCase()}</b></Button>
+        <Button variant="icon" className="desktop-setting" onClick={toggleTheme} aria-label={theme === 'light' ? (locale === 'de' ? 'Dunkles Design' : 'Dark theme') : (locale === 'de' ? 'Helles Design' : 'Light theme')}>{theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}</Button>
+        <Button variant="icon" className="desktop-setting" onClick={() => setLocale(locale === 'de' ? 'en' : 'de')} aria-label={locale === 'de' ? 'Sprache wechseln' : 'Switch language'}><Languages size={19} /><b>{locale.toUpperCase()}</b></Button>
+        <MobileAppMenu locale={locale} theme={theme} onTheme={toggleTheme} onLanguage={() => setLocale(locale === 'de' ? 'en' : 'de')} onGuide={() => setShowGuide(true)} />
       </div>
     </header>
 
@@ -606,7 +610,7 @@ export function PlannerApp() {
     {route && !ride.route ? <div className="route-edit-hint" role="toolbar" aria-label={locale === 'de' ? 'Routenbearbeitung' : 'Route editing'}>{editing ? <><span className="edit-mode-label">{locale === 'de' ? 'Bearbeiten' : 'Editing'}</span><Button className="edit-waypoints-button" onClick={() => openWaypointEditor()}><ListOrdered size={17} />{locale === 'de' ? 'Wegpunkte' : 'Waypoints'}</Button><Button variant="icon" disabled={!waypointHistory.past.length || isPlanning} onClick={undoWaypoints} aria-label={locale === 'de' ? 'Rückgängig' : 'Undo'}><Undo2 size={17} /></Button><Button variant="icon" disabled={!waypointHistory.future.length || isPlanning} onClick={redoWaypoints} aria-label={locale === 'de' ? 'Wiederholen' : 'Redo'}><Redo2 size={17} /></Button><Button variant="primary" disabled={isPlanning} onClick={finishEditing}>{locale === 'de' ? 'Fertig' : 'Done'}</Button></> : <><Button className="edit-route-button" onClick={() => { supply.close(); startEditing() }}><Pencil size={17} />{locale === 'de' ? 'Route bearbeiten' : 'Edit route'}</Button><Button variant="icon" className="supply-toggle" disabled={isPlanning} aria-label={locale === 'de' ? 'Versorgung entlang der Route' : 'Supplies along the route'} aria-pressed={supply.enabled} onClick={() => { setPlannerOpen(false); setRouteDetailsExpanded(false); supply.show() }}><Droplets size={19} /></Button></>}</div> : null}
     {editing && !ride.route && <p className="edit-instruction" role="note">{locale === 'de' ? 'Linie antippen oder ziehen. Punkte zum Ändern antippen. Danach die Route speichern.' : 'Tap or drag the line. Tap points to change them. Save the route when finished.'}</p>}
 
-    <aside id="planner-controls" tabIndex={-1} inert={!plannerOpen} className={`planner-panel ${plannerOpen ? 'is-open' : ''}`} aria-label={locale === 'de' ? 'Routeneinstellungen' : 'Route settings'}>
+    <PlannerPanel key={String(plannerOpen)} open={plannerOpen} compact={compactViewport} locale={locale}>
       <div className="panel-intro"><p className="eyebrow">{locale === 'de' ? 'Schweizer Routenplaner' : 'Swiss route planner'}</p><h1>{locale === 'de' ? 'Wohin möchtest du fahren?' : 'Where do you want to ride?'}</h1><p>{locale === 'de' ? 'Suche deinen Startort oder wähle ihn auf der Karte.' : 'Search for your starting point or choose it on the map.'}</p></div>
 
       <div className="segmented-control" aria-label={locale === 'de' ? 'Routentyp' : 'Route type'}>
@@ -657,11 +661,15 @@ export function PlannerApp() {
           ['quiet', locale === 'de' ? 'Ruhige Strassen' : 'Quiet roads'], ['balanced', locale === 'de' ? 'Ausgewogen' : 'Balanced'], ['direct', locale === 'de' ? 'Möglichst direkt' : 'Most direct'],
         ]} />
       </div>}
+      <section className="planning-supply" aria-label={locale === 'de' ? 'Verpflegung' : 'Supplies'}>
+        <label className="planning-supply-toggle"><Droplets size={18} /><span>{locale === 'de' ? 'Verpflegung auf der Karte' : 'Supplies on the map'}</span><input type="checkbox" checked={supply.enabled} onChange={(event) => supply.setEnabled(event.target.checked)} /></label>
+        {supply.enabled && <><div className="supply-filters">{(['water', 'food', 'shop'] as SupplyCategory[]).map((category) => <button key={category} type="button" aria-pressed={supply.categories.includes(category)} onClick={() => supply.toggleCategory(category)}>{supplyLabels[locale][category]}</button>)}</div><p>{route ? (locale === 'de' ? 'Orte entlang der aktuellen Route.' : 'Places along the current route.') : (locale === 'de' ? 'Wird nach der Routenberechnung angezeigt.' : 'Shown once your route has been calculated.')}</p>{route && <Button variant="text" onClick={() => { setPlannerOpen(false); setRouteDetailsExpanded(false); supply.show() }}>{locale === 'de' ? 'Orte und Zwischenstopps ansehen' : 'View places and stops'}</Button>}</>}
+      </section>
       <div className="planner-footer">
       <Button variant="primary" className="plan-button" onClick={planRoute} disabled={isPlanning}>{isPlanning ? <><span className="spinner" />{copy.planning}</> : <><Sparkles size={19} />{copy.calculate}</>}</Button>
       <label className="secondary-button import-button"><FileUp size={18} />{locale === 'de' ? 'GPX importieren' : 'Import GPX'}<input ref={gpxInputRef} className="sr-only" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml" aria-label={locale === 'de' ? 'GPX-Datei auswählen' : 'Choose GPX file'} onChange={(event) => { const file = event.target.files?.[0]; if (file) void importGpx(file) }} /></label>
       </div>
-    </aside>
+    </PlannerPanel>
 
     {route && <section className={`route-summary ${routeDetailsExpanded && !compactViewport ? 'is-expanded' : ''}`} aria-label={locale === 'de' ? 'Routenzusammenfassung' : 'Route summary'}>
       <div className="route-summary-head"><div>

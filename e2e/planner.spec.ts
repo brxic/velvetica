@@ -60,7 +60,10 @@ test('one-way hides distance; planning failure keeps input and offers a retry', 
 
 test('library filters, keyboard dismissal and theme survive reload', async ({ page }) => {
   await openPlanner(page)
-  await page.getByRole('button', { name: 'Dunkles Design' }).click()
+  if (await page.getByRole('button', { name: 'App-Menü' }).isVisible()) {
+    await page.getByRole('button', { name: 'App-Menü' }).click()
+    await page.getByRole('menuitem', { name: 'Dunkles Design' }).click()
+  } else await page.getByRole('button', { name: 'Dunkles Design' }).click()
   await page.reload()
   await expect(page.locator('.app-shell')).toHaveClass(/theme-dark/)
   const library = page.getByRole('button', { name: 'Meine Routen', exact: true }).last()

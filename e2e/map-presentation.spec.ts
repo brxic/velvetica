@@ -20,7 +20,7 @@ test('theme switching preserves the map canvas and imported route; branding and 
   const logo = page.locator('.brand-signet')
   await expect(logo).toBeVisible()
   expect(await logo.getAttribute('src')).not.toContain('full')
-  await expect(page.locator('.brand-wordmark')).toBeVisible({ visible: testInfo.project.name === 'desktop' })
+  await expect(page.locator('.brand-wordmark')).toBeVisible()
   const toggle = page.getByRole('button', { name: 'Planungsmenü schliessen' })
   await expect(toggle).toHaveText('Planung')
   await expect(toggle).toHaveAttribute('aria-expanded', 'true')
@@ -32,7 +32,10 @@ test('theme switching preserves the map canvas and imported route; branding and 
   const name = page.getByRole('textbox', { name: 'Routenname', exact: true })
   await name.fill('Theme-Test')
   for (const theme of ['dark', 'light', 'dark']) {
-    await page.getByRole('button', { name: theme === 'dark' ? 'Dunkles Design' : 'Helles Design' }).click()
+    if (testInfo.project.name === 'mobile') {
+      await page.getByRole('button', { name: 'App-Menü' }).click()
+      await page.getByRole('menuitem', { name: theme === 'dark' ? 'Dunkles Design' : 'Helles Design' }).click()
+    } else await page.getByRole('button', { name: theme === 'dark' ? 'Dunkles Design' : 'Helles Design' }).click()
     await expect(page.locator('.map-canvas')).toHaveAttribute('data-map-theme', theme)
     expect(await canvas.evaluate((element, previous) => element === previous, original)).toBe(true)
     await expect(name).toHaveValue('Theme-Test')
