@@ -7,7 +7,9 @@ function run(command, args, env = process.env) {
     child.on('exit', (code) => code === 0 ? resolve() : reject(new Error(`${command} exited ${code}`)))
   })
 }
-const env = { ...process.env, DATABASE_URL: 'postgresql://velvetia_test:test-only-not-for-production@127.0.0.1:54328/velvetia_test' }
+const port = process.env.VELVETIA_QA_DATABASE_PORT ?? '54328'
+if (!/^\d{4,5}$/.test(port) || Number(port) < 1024 || Number(port) > 65535) throw new Error('Invalid isolated QA database port')
+const env = { ...process.env, DATABASE_URL: `postgresql://velvetia_test:test-only-not-for-production@127.0.0.1:${port}/velvetia_test` }
 try {
   await run('docker', ['compose', '-f', 'compose.qa.yaml', 'up', '-d', '--wait'])
   await run(process.execPath, ['node_modules/vitest/vitest.mjs', 'run', '--config', 'vitest.integration.config.ts'], env)

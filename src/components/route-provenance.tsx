@@ -8,11 +8,16 @@ export function RouteProvenance({ provenance, locale }: { provenance?: Provenanc
     medium: locale === 'de' ? 'Mittel' : 'Medium',
     high: locale === 'de' ? 'Hoch' : 'High',
   }[provenance.confidence]
-  const updated = new Intl.DateTimeFormat(locale === 'de' ? 'de-CH' : 'en-CH', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(provenance.dataUpdatedAt))
+  const formatDate = (value: string | null) => value && Number.isFinite(Date.parse(value)) ? new Intl.DateTimeFormat(locale === 'de' ? 'de-CH' : 'en-CH', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : locale === 'de' ? 'Nicht bekannt' : 'Unknown'
+  // Earlier versions used the query/import time as source freshness. Those
+  // providers do not expose a source date; do not repeat that legacy claim.
+  const hasSourceDate = provenance.routingEngine !== 'FOSSGIS OSRM Bike' && provenance.routingEngine !== 'GPX Import' && (!provenance.routingEngine.startsWith('Valhalla') || /^\d{9,}$/.test(provenance.graphVersion))
+  const updated = formatDate(hasSourceDate ? provenance.dataUpdatedAt : null)
 
   return <div className="provenance-card" aria-label={locale === 'de' ? 'Datenquellen und Konfidenz' : 'Data sources and confidence'}>
     <div><Database size={15} /><span>{locale === 'de' ? 'Quelle' : 'Source'}</span><strong>{provenance.primaryDataSource}</strong></div>
     <div><CalendarClock size={15} /><span>{locale === 'de' ? 'Datenstand' : 'Data updated'}</span><strong>{updated}</strong></div>
+    <div><CalendarClock size={15} /><span>{locale === 'de' ? 'Ausgewertet' : 'Analysed'}</span><strong>{formatDate(provenance.analyzedAt)}</strong></div>
     <div><ShieldCheck size={15} /><span>{locale === 'de' ? 'Datenkonfidenz' : 'Data confidence'}</span><strong className={`confidence-${provenance.confidence}`}>{confidence}</strong></div>
   </div>
 }

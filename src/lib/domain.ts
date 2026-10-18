@@ -41,7 +41,7 @@ export type RouteProvenance = {
   routingEngine: string
   primaryDataSource: string
   graphVersion: string
-  dataUpdatedAt: string
+  dataUpdatedAt: string | null
   analyzedAt: string
   regionId: string
   confidence: 'low' | 'medium' | 'high'

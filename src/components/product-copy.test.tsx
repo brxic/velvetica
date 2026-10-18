@@ -3,10 +3,17 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { Onboarding } from './onboarding'
 import { RouteShare } from './route-share'
 import { t } from '@/lib/i18n'
+import { RouteProvenance } from './route-provenance'
+import { rideTestRoute } from '../../test-fixtures/ride-route'
 
 afterEach(cleanup)
 
 describe('product explanations', () => {
+  it('never presents legacy query or import timestamps as source freshness', () => {
+    render(<RouteProvenance locale="de" provenance={{ ...rideTestRoute.provenance, routingEngine: 'FOSSGIS OSRM Bike' }} />)
+    expect(screen.getByText('Nicht bekannt')).toBeVisible()
+    expect(screen.getByText('Ausgewertet')).toBeVisible()
+  })
   it('distinguishes distance for round trips from destination for one-way routes', () => {
     render(<Onboarding locale="de" onClose={() => undefined} />)
     fireEvent.click(screen.getByRole('button', { name: 'Weiter' }))

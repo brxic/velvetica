@@ -11,11 +11,18 @@ export type WaypointHistoryAction =
   | { type: 'undo' }
   | { type: 'redo' }
   | { type: 'reset'; waypoints?: Waypoint[] }
+  | { type: 'rollback'; waypoints: Waypoint[] }
+  | { type: 'replace'; waypoints: Waypoint[] }
 
 export const initialWaypointHistory: WaypointHistory = { past: [], present: [], future: [] }
 
 export function waypointHistoryReducer(state: WaypointHistory, action: WaypointHistoryAction): WaypointHistory {
   if (action.type === 'reset') return { past: [], present: action.waypoints ?? [], future: [] }
+  if (action.type === 'replace') return { ...state, present: action.waypoints }
+  if (action.type === 'rollback') {
+    const index = state.past.findLastIndex((points) => JSON.stringify(points) === JSON.stringify(action.waypoints))
+    return { past: index >= 0 ? state.past.slice(0, index) : state.past, present: action.waypoints, future: [] }
+  }
   if (action.type === 'undo') {
     const previous = state.past.at(-1)
     if (!previous) return state

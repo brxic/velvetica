@@ -18,6 +18,8 @@ Zur Auswahl stehen Rennrad, Gravel, Freizeit/Touring und Alltag/City. Mountainbi
 
 Der ursprüngliche [Umsetzungsplan](./VELVETIA_UMSETZUNGSPLAN.md) beschreibt auch noch nicht implementierte Ausbaustufen.
 
+Lokale Entwurfswiederherstellung, konkrete Routingfehler und die Ergebnisse der realen Schweizer Routingprüfung sind in [docs/PACKAGE_A.md](./docs/PACKAGE_A.md) dokumentiert. Die dort aufgeführten offenen Live-Fälle sind keine bestandene Feldabnahme.
+
 ## Marke
 
 Die vorhandenen Logos werden unverändert verwendet:

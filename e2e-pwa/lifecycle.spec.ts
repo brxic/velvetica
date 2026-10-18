@@ -59,6 +59,12 @@ test('real worker caches the shell and .mjs; offline saving stays local and does
   await expect(page.getByRole('complementary', { name: 'App-Status' })).toContainText('Offline')
   await context.setOffline(false)
   await expect(page.getByRole('complementary', { name: 'App-Status' })).toContainText('Netzwerk wieder verbunden')
+  // Offline cold starts must not expose account-scoped drafts before identity
+  // can be verified. Reconnection now explicitly offers local recovery.
+  const recovery = page.getByRole('dialog', { name: 'Entwurf wiederherstellen' })
+  await expect(recovery).toBeVisible()
+  await recovery.getByRole('button', { name: 'Wiederherstellen', exact: true }).click()
+  await expect(page.getByRole('textbox', { name: 'Routenname', exact: true })).toHaveValue('Bern Testfahrt')
   await page.getByRole('button', { name: 'Status schliessen' }).click()
   await expect(page.getByRole('complementary', { name: 'App-Status' })).not.toBeVisible()
 })
@@ -96,6 +102,8 @@ test('update waits for saved draft and other tabs, then activates and reloads on
   await another.close()
   await Promise.all([page.waitForEvent('load'), update.click()])
   await expect(page.getByRole('button', { name: 'Jetzt aktualisieren' })).not.toBeVisible()
+  await page.getByRole('dialog', { name: 'Entwurf wiederherstellen' }).getByRole('button', { name: 'Wiederherstellen', exact: true }).click()
+  await expect(name).toHaveValue('P2 Entwurf bleibt erhalten')
   await page.getByRole('button', { name: /^Meine Routen/ }).click()
   await expect(page.getByRole('button', { name: /^P2 Entwurf bleibt erhalten Rennrad/ })).toBeVisible()
 })

@@ -7,7 +7,7 @@ import type { RouteOwner } from '@/lib/anonymous-owner'
 import { defaultAccountPreferences } from '@/lib/account-preferences'
 
 const testUrl = process.env.DATABASE_URL ?? ''
-if (new URL(testUrl).hostname !== '127.0.0.1' || new URL(testUrl).port !== '54328' || !testUrl.endsWith('/velvetia_test')) throw new Error('Integration tests require the isolated compose.qa.yaml database')
+if (new URL(testUrl).hostname !== '127.0.0.1' || new URL(testUrl).port !== (process.env.VELVETIA_QA_DATABASE_PORT ?? '54328') || !testUrl.endsWith('/velvetia_test')) throw new Error('Integration tests require the isolated compose.qa.yaml database')
 const db = new Pool({ connectionString: testUrl })
 const userA = randomUUID(), userB = randomUUID(), ownerKey = randomUUID()
 const owner: RouteOwner = { userId: userA, ownerKey, storageScope: 'test-a', setCookie: false, secure: false }

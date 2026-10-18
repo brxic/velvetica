@@ -5,12 +5,14 @@ import { compareRouteQuality, createRoundTripSeeds, evaluateRoundTrip, usableRou
 import { validateRoutedGeometry } from './geometry-quality'
 import { createRouteName } from '@/lib/route-name'
 import { cumulativeDistances } from '@/lib/route-analysis'
+import { RoutingError } from './errors'
+import { routerResponse, routingSignal } from './transport'
 
 type ValhallaLeg = { shape: string | GeoJSON.LineString }
 type ValhallaResponse = { trip?: { summary?: { length?: number; time?: number }; legs?: ValhallaLeg[]; status_message?: string } }
 
-const bicycleType: Record<BikeProfile, 'Road' | 'Cross' | 'Hybrid'> = {
-  road: 'Road', gravel: 'Cross', touring: 'Hybrid', city: 'Hybrid',
+const bicycleType: Record<BikeProfile, 'road' | 'cross' | 'hybrid'> = {
+  road: 'road', gravel: 'cross', touring: 'hybrid', city: 'hybrid',
 }
 
 function collectCoordinates(legs: ValhallaLeg[]): Coordinate[] {
@@ -20,7 +22,7 @@ function collectCoordinates(legs: ValhallaLeg[]): Coordinate[] {
   })
 }
 
-async function fetchElevation(baseUrl: string, coordinates: Coordinate[]) {
+async function fetchElevation(baseUrl: string, coordinates: Coordinate[], signal?: AbortSignal) {
   const stride = Math.max(1, Math.ceil(coordinates.length / 120))
   const sampled = coordinates.filter((_, index) => index % stride === 0)
   if (sampled.at(-1) !== coordinates.at(-1)) sampled.push(coordinates.at(-1)!)
@@ -29,17 +31,17 @@ async function fetchElevation(baseUrl: string, coordinates: Coordinate[]) {
   if ((coordinates.length - 1) % stride !== 0) sampledDistances.push(distances.at(-1)!)
   try {
     const response = await fetch(`${baseUrl.replace(/\/$/, '')}/height`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(5_000),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: routingSignal(5_000, signal),
       body: JSON.stringify({ shape: sampled.map(([lon, lat]) => ({ lat, lon })) }),
     })
     if (!response.ok) throw new Error('VALHALLA_HEIGHT_FAILED')
     const data = await response.json() as { height?: Array<number | null> }
-    const valid = (data.height ?? []).flatMap((height, index) => typeof height === 'number' && Number.isFinite(height) && index < sampled.length ? [{ height, distance: sampledDistances[index] }] : [])
+    const valid = (data.height ?? []).flatMap((height, index) => typeof height === 'number' && Number.isFinite(height) && height >= -1000 && height <= 10000 && index < sampled.length ? [{ height, distance: sampledDistances[index] }] : [])
     const profile = valid.map((sample) => sample.height)
     let gain = 0; let loss = 0
     for (let index = 1; index < profile.length; index++) {
       const difference = profile[index] - profile[index - 1]
-      if (Math.abs(difference) > 80) continue
+      if (Math.abs(difference) > Math.max(5, (valid[index].distance - valid[index - 1].distance) * 1000 * .4)) continue
       if (difference > 0) gain += difference; else loss -= difference
     }
     return { profile, distances: valid.map((sample) => sample.distance), gain: Math.round(gain), loss: Math.round(loss) }
@@ -67,13 +69,13 @@ export function summarizeTraceEdges(edges: TraceEdge[], locale: Locale = 'de') {
   return { asphaltPercent, cyclewayPercent: Math.round(cycleway / total * 100), analyzed: true, warnings }
 }
 
-async function fetchRouteAttributes(baseUrl: string, coordinates: Coordinate[], locale: Locale) {
+async function fetchRouteAttributes(baseUrl: string, coordinates: Coordinate[], locale: Locale, signal?: AbortSignal) {
   const stride = Math.max(1, Math.ceil(coordinates.length / 120))
   const sampled = coordinates.filter((_, index) => index % stride === 0)
   if (sampled.at(-1) !== coordinates.at(-1)) sampled.push(coordinates.at(-1)!)
   try {
     const response = await fetch(`${baseUrl.replace(/\/$/, '')}/trace_attributes`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(8_000),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: routingSignal(8_000, signal),
       body: JSON.stringify({
         shape: sampled.map(([lon, lat]) => ({ lat, lon })), costing: 'bicycle', shape_match: 'walk_or_snap',
         filters: { action: 'include', attributes: ['edge.length', 'edge.surface', 'edge.use', 'edge.cycle_lane', 'edge.tunnel', 'edge.dismount'] },
@@ -85,23 +87,24 @@ async function fetchRouteAttributes(baseUrl: string, coordinates: Coordinate[], 
   } catch { return { asphaltPercent: 0, cyclewayPercent: 0, analyzed: false, warnings: [locale === 'de' ? 'Oberflächen- und Wegattribute konnten für diese Route nicht ausgewertet werden.' : 'Surface and path attributes could not be analyzed for this route.'] } }
 }
 
-async function fetchGraphMetadata(baseUrl: string) {
+async function fetchGraphMetadata(baseUrl: string, signal?: AbortSignal) {
   try {
-    const response = await fetch(`${baseUrl.replace(/\/$/, '')}/status`, { signal: AbortSignal.timeout(3_000) })
+    const response = await fetch(`${baseUrl.replace(/\/$/, '')}/status`, { signal: routingSignal(3_000, signal) })
     if (!response.ok) throw new Error('VALHALLA_STATUS_FAILED')
     const status = await response.json() as { version?: string; tileset_last_modified?: number }
     return {
-      graphVersion: status.version ?? 'unknown',
-      dataUpdatedAt: status.tileset_last_modified ? new Date(status.tileset_last_modified * 1000).toISOString() : new Date().toISOString(),
+      engineVersion: status.version ?? 'unknown',
+      graphVersion: status.tileset_last_modified ? String(status.tileset_last_modified) : 'unknown',
+      dataUpdatedAt: status.tileset_last_modified && Number.isFinite(status.tileset_last_modified) && status.tileset_last_modified > 0 ? new Date(status.tileset_last_modified * 1000).toISOString() : null,
     }
-  } catch { return { graphVersion: 'unknown', dataUpdatedAt: new Date().toISOString() } }
+  } catch { return { engineVersion: 'unknown', graphVersion: 'unknown', dataUpdatedAt: null } }
 }
 
 export class ValhallaProvider implements RoutingProvider {
   readonly id = 'valhalla' as const
   constructor(private readonly baseUrl: string) {}
 
-  async plan(request: PlanningRequest): Promise<PlannedRoute> {
+  async plan(request: PlanningRequest, signal?: AbortSignal): Promise<PlannedRoute> {
     const bicycleOptions = {
       bicycle_type: bicycleType[request.profile],
       cycling_speed: request.profile === 'road' ? 25 : request.profile === 'gravel' ? 20 : 18,
@@ -111,16 +114,16 @@ export class ValhallaProvider implements RoutingProvider {
     }
     const routeCandidate = async (locations: Array<{ lat: number; lon: number; type: 'break' | 'through' }>) => {
       const response = await fetch(`${this.baseUrl.replace(/\/$/, '')}/route`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(20_000),
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: routingSignal(20_000, signal),
         body: JSON.stringify({
           locations, costing: 'bicycle', units: 'kilometers', language: request.locale === 'de' ? 'de-DE' : 'en-US',
           costing_options: { bicycle: bicycleOptions },
         }),
       })
-      if (!response.ok) throw new Error(`VALHALLA_HTTP_${response.status}`)
+      await routerResponse(response, 'valhalla')
       const result = await response.json() as ValhallaResponse
       const coordinates = collectCoordinates(result.trip?.legs ?? [])
-      if (coordinates.length < 2) throw new Error(result.trip?.status_message ?? 'VALHALLA_EMPTY_ROUTE')
+      if (coordinates.length < 2) throw new RoutingError('NO_ROUTE')
       return { coordinates, distanceKm: result.trip?.summary?.length ?? 0, durationSeconds: result.trip?.summary?.time ?? 0 }
     }
 
@@ -137,7 +140,13 @@ export class ValhallaProvider implements RoutingProvider {
           const candidate = await routeCandidate([originLocation, ...seed.locations, originLocation])
           return { candidate, seed, quality: evaluateRoundTrip(candidate.coordinates, origin, candidate.distanceKm, request.targetDistanceKm) }
         }))
-        return settled.flatMap((result) => result.status === 'fulfilled' ? [result.value] : [])
+        signal?.throwIfAborted()
+        const complete = settled.flatMap((result) => result.status === 'fulfilled' ? [result.value] : [])
+        if (!complete.length) {
+          const failure = settled.find((result) => result.status === 'rejected')
+          if (failure?.status === 'rejected') throw failure.reason
+        }
+        return complete
       }
 
       let candidates = await runSeeds(1)
@@ -147,8 +156,9 @@ export class ValhallaProvider implements RoutingProvider {
       if (!candidates[0].quality.acceptable) {
         const correction = Math.max(.72, Math.min(1.28, request.targetDistanceKm / Math.max(1, candidates[0].candidate.distanceKm)))
         const retryScales = [correction, Math.max(.62, correction * .82), Math.min(1.38, correction * 1.18)]
-        const retries = await Promise.all(retryScales.map(runSeeds))
-        candidates = [...candidates, ...retries.flat()].sort((a, b) => compareRouteQuality(a.quality, b.quality))
+        const retries = await Promise.allSettled(retryScales.map(runSeeds))
+        signal?.throwIfAborted()
+        candidates = [...candidates, ...retries.flatMap((result) => result.status === 'fulfilled' ? result.value : [])].sort((a, b) => compareRouteQuality(a.quality, b.quality))
       }
 
       selected = candidates[0].candidate
@@ -167,7 +177,8 @@ export class ValhallaProvider implements RoutingProvider {
 
     const { coordinates, distanceKm, durationSeconds } = selected
     validateRoutedGeometry(coordinates, distanceKm, request)
-    const [elevation, attributes, graph] = await Promise.all([fetchElevation(this.baseUrl, coordinates), fetchRouteAttributes(this.baseUrl, coordinates, request.locale), fetchGraphMetadata(this.baseUrl)])
+    const [elevation, attributes, graph] = await Promise.all([fetchElevation(this.baseUrl, coordinates, signal), fetchRouteAttributes(this.baseUrl, coordinates, request.locale, signal), fetchGraphMetadata(this.baseUrl, signal)])
+    signal?.throwIfAborted()
     const createdAt = new Date().toISOString()
     const qualityWarning = selectedQuality && !selectedQuality.acceptable
       ? [request.locale === 'de' ? 'Die beste verfügbare Rundtour weicht stärker als üblich vom gewünschten Verlauf ab. Prüfe sie vor der Fahrt oder setze einen Via-Punkt.' : 'The best available round trip differs more than usual from the requested shape. Review it before riding or add a via point.']
@@ -175,9 +186,9 @@ export class ValhallaProvider implements RoutingProvider {
     return {
       id: crypto.randomUUID(), name: createRouteName(request.locale, request.profile, request.mode, request.waypoints), createdAt, updatedAt: createdAt,
       profile: request.profile, mode: request.mode, geometry: { type: 'LineString', coordinates }, waypoints: [...request.waypoints, ...generatedWaypoints],
-      metrics: { distanceKm: Math.round(distanceKm * 10) / 10, durationMinutes: Math.round(durationSeconds / 60), elevationGainM: elevation.gain, elevationLossM: elevation.loss, asphaltPercent: attributes.asphaltPercent, cyclewayPercent: attributes.cyclewayPercent, surfaceAnalyzed: attributes.analyzed, confidence: 'verified', elevationProfile: elevation.profile, elevationDistancesKm: elevation.distances },
+      metrics: { distanceKm: Math.round(distanceKm * 10) / 10, durationMinutes: Math.round(durationSeconds / 60), elevationGainM: elevation.gain, elevationLossM: elevation.loss, asphaltPercent: attributes.asphaltPercent, cyclewayPercent: attributes.cyclewayPercent, surfaceAnalyzed: attributes.analyzed, elevationAnalyzed: elevation.profile.length > 1, confidence: 'verified', elevationProfile: elevation.profile, elevationDistancesKm: elevation.distances },
       warnings: [...qualityWarning, ...attributes.warnings],
-      provenance: { routingEngine: `Valhalla ${graph.graphVersion}`, primaryDataSource: request.locale === 'de' ? 'OpenStreetMap / Geofabrik Schweiz' : 'OpenStreetMap / Geofabrik Switzerland', graphVersion: graph.graphVersion, dataUpdatedAt: graph.dataUpdatedAt, analyzedAt: createdAt, regionId: 'ch', confidence: attributes.analyzed && elevation.profile.length ? 'high' : 'medium' },
+      provenance: { routingEngine: `Valhalla ${graph.engineVersion}`, primaryDataSource: request.locale === 'de' ? 'OpenStreetMap / Geofabrik Schweiz' : 'OpenStreetMap / Geofabrik Switzerland', graphVersion: graph.graphVersion, dataUpdatedAt: graph.dataUpdatedAt, analyzedAt: createdAt, regionId: 'ch', confidence: attributes.analyzed && elevation.profile.length ? 'high' : 'medium' },
     }
   }
 }

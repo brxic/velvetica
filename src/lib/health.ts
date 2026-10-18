@@ -43,11 +43,13 @@ export async function checkRouting(): Promise<HealthCheck> {
   }
 
   if (process.env.ROUTING_PROVIDER !== 'valhalla') {
-    return { status: 'disabled', latencyMs: elapsed(startedAt) }
+    return !process.env.ROUTING_PROVIDER || process.env.ROUTING_PROVIDER === 'preview' ? { status: 'disabled', latencyMs: elapsed(startedAt) } : unavailable(startedAt)
   }
 
+  if (!process.env.VALHALLA_URL) return unavailable(startedAt)
+
   try {
-    const response = await fetch(`${process.env.VALHALLA_URL ?? 'http://localhost:8002'}/status`, {
+    const response = await fetch(`${process.env.VALHALLA_URL.replace(/\/$/, '')}/status`, {
       cache: 'no-store',
       signal: AbortSignal.timeout(TIMEOUT_MS),
     })

@@ -18,6 +18,6 @@ export const plannedRouteSchema = z.object({
     if (distances && (distances.length !== metrics.elevationProfile.length || distances.some((distance, index) => index > 0 && distance < distances[index - 1]))) context.addIssue({ code: 'custom', path: ['elevationDistancesKm'], message: 'Elevation distances must be ordered and match the elevation values.' })
   }),
   warnings: z.array(z.string().max(500)).max(50),
-  provenance: z.object({ routingEngine: z.string().max(100), primaryDataSource: z.string().max(200), graphVersion: z.string().max(100), dataUpdatedAt: z.string().datetime(), analyzedAt: z.string().datetime(), regionId: z.string().max(30), confidence: z.enum(['low', 'medium', 'high']) }),
+  provenance: z.object({ routingEngine: z.string().max(100), primaryDataSource: z.string().max(200), graphVersion: z.string().max(100), dataUpdatedAt: z.string().datetime().nullable(), analyzedAt: z.string().datetime(), regionId: z.string().max(30), confidence: z.enum(['low', 'medium', 'high']) }),
   favorite: z.boolean().optional(), serverVersion: z.number().int().positive().optional(),
 })

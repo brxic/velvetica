@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: test-only-not-for-production
       POSTGRES_DB: velvetia_test
     ports:
-      - "127.0.0.1:54328:5432"
+      - "127.0.0.1:${VELVETIA_QA_DATABASE_PORT:-54328}:5432"
     tmpfs:
       - /var/lib/postgresql/data
     healthcheck:

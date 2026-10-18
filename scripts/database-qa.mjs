@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { Pool } from 'pg'
 
 const url = new URL(process.env.DATABASE_URL ?? '')
-if (url.hostname !== '127.0.0.1' || url.port !== '54328' || url.pathname !== '/velvetia_test') throw new Error('Restore QA only supports the isolated compose.qa.yaml database')
+if (url.hostname !== '127.0.0.1' || url.port !== (process.env.VELVETIA_QA_DATABASE_PORT ?? '54328') || url.pathname !== '/velvetia_test') throw new Error('Restore QA only supports the isolated compose.qa.yaml database')
 function exec(args) {
   return new Promise((resolve, reject) => {
     const child = spawn('docker', ['compose', '-f', 'compose.qa.yaml', 'exec', '-T', 'database', ...args], { stdio: 'inherit' })

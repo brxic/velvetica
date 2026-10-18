@@ -4,6 +4,8 @@ import type { RoutingProvider } from './provider'
 import { compareRouteQuality, createRoundTripSeeds, evaluateRoundTrip, usableRoundTrip } from './round-trip-quality'
 import { validateRoutedGeometry } from './geometry-quality'
 import { cumulativeDistances } from '@/lib/route-analysis'
+import { RoutingError } from './errors'
+import { routerResponse, routingSignal } from './transport'
 
 type OsrmRoute = { distance: number; duration: number; geometry: GeoJSON.LineString }
 type OsrmResponse = { code?: string; routes?: OsrmRoute[]; message?: string }
@@ -25,7 +27,7 @@ export function wgs84ToLv95([longitude, latitude]: Coordinate): Coordinate {
   return [Math.round(easting * 100) / 100, Math.round(northing * 100) / 100]
 }
 
-async function fetchElevationProfile(coordinates: Coordinate[]) {
+async function fetchElevationProfile(coordinates: Coordinate[], signal?: AbortSignal) {
   const stride = Math.max(1, Math.ceil(coordinates.length / 400))
   const sampled = coordinates.filter((_, index) => index % stride === 0)
   if (sampled.at(-1) !== coordinates.at(-1)) sampled.push(coordinates.at(-1)!)
@@ -37,7 +39,7 @@ async function fetchElevationProfile(coordinates: Coordinate[]) {
   for (let index = 1; index < geometry.coordinates.length; index++) serviceDistances.push(serviceDistances[index - 1] + Math.hypot(geometry.coordinates[index][0] - geometry.coordinates[index - 1][0], geometry.coordinates[index][1] - geometry.coordinates[index - 1][1]))
   try {
     const body = new URLSearchParams({ geom: JSON.stringify(geometry), sr: '2056', nb_points: '240', offset: '2', distinct_points: 'True' })
-    const response = await fetch('https://api3.geo.admin.ch/rest/services/profile.json', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Velvetia/0.1 (https://github.com/brxic/velvetica)' }, body, signal: AbortSignal.timeout(12_000) })
+    const response = await fetch('https://api3.geo.admin.ch/rest/services/profile.json', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Velvetia/0.1 (https://github.com/brxic/velvetica)' }, body, signal: routingSignal(12_000, signal) })
     if (!response.ok) throw new Error(`SWISSTOPO_PROFILE_${response.status}`)
     const points = await response.json() as ProfilePoint[]
     const serviceTotal = serviceDistances.at(-1) ?? 0
@@ -45,7 +47,7 @@ async function fetchElevationProfile(coordinates: Coordinate[]) {
     let upper = 0
     const valid = points.flatMap((point, index) => {
       const height = point.alts?.COMB ?? point.alts?.DTM2 ?? point.alts?.DTM25
-      if (typeof height !== 'number' || !Number.isFinite(height)) return []
+      if (typeof height !== 'number' || !Number.isFinite(height) || height < -1000 || height > 10000) return []
       const distance = Math.max(0, Math.min(serviceTotal, typeof point.dist === 'number' && Number.isFinite(point.dist) && reportedTotal > 0 ? point.dist / reportedTotal * serviceTotal : index / Math.max(1, points.length - 1) * serviceTotal))
       while (upper < serviceDistances.length - 1 && serviceDistances[upper] < distance) upper++
       const lower = Math.max(0, upper - 1)
@@ -57,7 +59,7 @@ async function fetchElevationProfile(coordinates: Coordinate[]) {
     let gain = 0; let loss = 0
     for (let index = 1; index < profile.length; index++) {
       const delta = profile[index] - profile[index - 1]
-      if (Math.abs(delta) > 80) continue
+      if (Math.abs(delta) > Math.max(5, (valid[index].distance - valid[index - 1].distance) * 1000 * .4)) continue
       if (delta > 0) gain += delta; else loss -= delta
     }
     return { profile, distances: valid.map((sample) => sample.distance), gain: Math.round(gain), loss: Math.round(loss) }
@@ -68,19 +70,22 @@ export class FossgisBikeProvider implements RoutingProvider {
   readonly id = 'fossgis' as const
   constructor(private readonly baseUrl = 'https://routing.openstreetmap.de/routed-bike') {}
 
-  private async route(coordinates: Coordinate[]) {
+  private async route(coordinates: Coordinate[], signal?: AbortSignal) {
+    signal?.throwIfAborted()
     await respectPublicRateLimit()
+    signal?.throwIfAborted()
     const locations = coordinates.map(([longitude, latitude]) => `${longitude.toFixed(6)},${latitude.toFixed(6)}`).join(';')
     const url = `${this.baseUrl.replace(/\/$/, '')}/route/v1/driving/${locations}?overview=full&geometries=geojson&steps=false&continue_straight=true`
-    const response = await fetch(url, { headers: { 'User-Agent': 'Velvetia/0.1 (https://github.com/brxic/velvetica)', 'Accept': 'application/json' }, signal: AbortSignal.timeout(12_000) })
-    if (!response.ok) throw new Error(`FOSSGIS_HTTP_${response.status}`)
+    const response = await fetch(url, { headers: { 'User-Agent': 'Velvetia/0.1 (https://github.com/brxic/velvetica)', 'Accept': 'application/json' }, signal: routingSignal(12_000, signal) })
+    await routerResponse(response, 'fossgis')
     const result = await response.json() as OsrmResponse
     const route = result.routes?.[0]
-    if (result.code !== 'Ok' || !route?.geometry.coordinates?.length) throw new Error(result.message ?? 'FOSSGIS_EMPTY_ROUTE')
+    if (result.code === 'NoRoute' || result.code === 'NoSegment') throw new RoutingError('NO_ROUTE')
+    if (result.code !== 'Ok' || !route?.geometry.coordinates?.length) throw new RoutingError('ROUTE_QUALITY_FAILED')
     return route
   }
 
-  async plan(request: PlanningRequest): Promise<PlannedRoute> {
+  async plan(request: PlanningRequest, signal?: AbortSignal): Promise<PlannedRoute> {
     const explicit = request.waypoints.map((point) => point.coordinate)
     let routed: OsrmRoute
     let generatedWaypoints: PlanningRequest['waypoints'] = []
@@ -89,7 +94,7 @@ export class FossgisBikeProvider implements RoutingProvider {
       const routeSeed = async (scale: number, direction = 0) => {
         const seed = createRoundTripSeeds(explicit[0], request.targetDistanceKm, scale)[direction]
         const anchors = seed.locations.map((location) => [location.lon, location.lat] as Coordinate)
-        return { anchors, route: await this.route([explicit[0], ...anchors, explicit[0]]) }
+        return { anchors, route: await this.route([explicit[0], ...anchors, explicit[0]], signal) }
       }
       let selected = await routeSeed(1)
       const qualityOf = (candidate: typeof selected) => evaluateRoundTrip(candidate.route.geometry.coordinates as Coordinate[], explicit[0], candidate.route.distance / 1000, request.targetDistanceKm)
@@ -117,19 +122,21 @@ export class FossgisBikeProvider implements RoutingProvider {
       generatedWaypoints = anchors.map((coordinate, index) => ({ id: `generated-fossgis-${index}`, coordinate, label: `Generated anchor ${index + 1}`, kind: 'generated' }))
     } else {
       const locations = request.mode === 'round-trip' ? [...explicit, explicit[0]] : explicit
-      routed = await this.route(locations)
+      routed = await this.route(locations, signal)
     }
     const coordinates = routed.geometry.coordinates as Coordinate[]
     validateRoutedGeometry(coordinates, routed.distance / 1000, request)
-    const elevation = await fetchElevationProfile(coordinates)
+    signal?.throwIfAborted()
+    const elevation = await fetchElevationProfile(coordinates, signal)
+    signal?.throwIfAborted()
     const now = new Date().toISOString()
     const de = request.locale === 'de'
     return {
       id: crypto.randomUUID(), name: createRouteName(request.locale, request.profile, request.mode, request.waypoints), createdAt: now, updatedAt: now,
       profile: request.profile, mode: request.mode, geometry: routed.geometry, waypoints: [...request.waypoints, ...generatedWaypoints],
-      metrics: { distanceKm: Math.round(routed.distance / 100) / 10, durationMinutes: Math.max(1, Math.round(routed.duration / 60)), elevationGainM: elevation.gain, elevationLossM: elevation.loss, asphaltPercent: 0, cyclewayPercent: 0, surfaceAnalyzed: false, confidence: 'verified', elevationProfile: elevation.profile, elevationDistancesKm: elevation.distances },
+      metrics: { distanceKm: Math.round(routed.distance / 100) / 10, durationMinutes: Math.max(1, Math.round(routed.duration / 60)), elevationGainM: elevation.gain, elevationLossM: elevation.loss, asphaltPercent: 0, cyclewayPercent: 0, surfaceAnalyzed: false, elevationAnalyzed: elevation.profile.length > 1, confidence: 'verified', elevationProfile: elevation.profile, elevationDistancesKm: elevation.distances },
       warnings: [...qualityWarning, de ? 'Untergrund und Radweganteil sind bei diesem Router nicht analysiert.' : 'Surface and cycleway share are not analysed by this router.', de ? 'Dieser Router verwendet ein allgemeines Fahrradprofil. Fahrradtyp und zusätzliche Wünsche werden hier nicht getrennt berücksichtigt.' : 'This router uses a general bicycle profile. Bike types and additional preferences are not handled separately.'],
-      provenance: { routingEngine: 'FOSSGIS OSRM Bike', primaryDataSource: 'OpenStreetMap · swisstopo elevation', graphVersion: 'FOSSGIS rolling OSM graph', dataUpdatedAt: now, analyzedAt: now, regionId: 'ch', confidence: elevation.profile.length ? 'medium' : 'low' },
+      provenance: { routingEngine: 'FOSSGIS OSRM Bike', primaryDataSource: 'OpenStreetMap · swisstopo elevation', graphVersion: 'FOSSGIS rolling OSM graph', dataUpdatedAt: null, analyzedAt: now, regionId: 'ch', confidence: elevation.profile.length ? 'medium' : 'low' },
     }
   }
 }

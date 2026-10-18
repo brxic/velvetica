@@ -26,6 +26,9 @@ import { acknowledgeSavedDraft, routeSignature, type RouteSyncState } from '@/li
 import { PWA_UPDATE_CHECK } from '@/lib/pwa'
 import { useRideSession } from './use-ride-session'
 import { RidePanel } from './ride-panel'
+import { routingErrorMessage } from '@/lib/routing/errors'
+import { useWorkspaceRecovery } from './use-workspace-recovery'
+import { resolveWorkspaceIdentity } from '@/lib/workspace-identity-client'
 
 const LEGACY_STORAGE_KEY = 'velvetia.saved-routes.v1'
 const STORAGE_KEY_PREFIX = 'velvetia.saved-routes.v2'
@@ -39,6 +42,7 @@ const profiles: Array<{ id: BikeProfile; icon: typeof Bike }> = [
 function formatDuration(minutes: number) { const h = Math.floor(minutes / 60); const m = minutes % 60; return `${h}:${String(m).padStart(2, '0')} h` }
 function readStoredRoutes(key: string): PlannedRoute[] { try { const items: unknown = JSON.parse(localStorage.getItem(key) ?? '[]'); return Array.isArray(items) ? items.flatMap((item) => { const parsed = plannedRouteSchema.safeParse(item); return parsed.success ? [parsed.data] : [] }) : [] } catch { return [] } }
 function writeStoredRoutes(key: string, routes: PlannedRoute[]) { try { localStorage.setItem(key, JSON.stringify(routes)); return true } catch { return false } }
+function storedPreference(key: string) { try { return localStorage.getItem(key) } catch { return null } }
 function mergeSavedRoutes(local: PlannedRoute[], remote: PlannedRoute[]) {
   const routes = new Map<string, PlannedRoute>()
   for (const route of [...local, ...remote]) {
@@ -78,6 +82,16 @@ export function PlannerApp() {
   const [isPlanning, setIsPlanning] = useState(false); const [notice, setNotice] = useState<string | null>(null)
   const [showGuide, setShowGuide] = useState(false); const [showSaved, setShowSaved] = useState(false); const [plannerOpen, setPlannerOpen] = useState(true)
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [genericRouter, setGenericRouter] = useState(false)
+  useEffect(() => {
+    const controller = new AbortController()
+    void fetch('/api/routing/config', { signal: controller.signal, cache: 'no-store' }).then(async (response) => {
+      if (!response.ok) return
+      const config = await response.json() as { provider: string }
+      if (!controller.signal.aborted) setGenericRouter(config.provider === 'fossgis')
+    }).catch(() => undefined)
+    return () => controller.abort()
+  }, [])
   const [compactViewport, setCompactViewport] = useState(false)
   useEffect(() => {
     const query = window.matchMedia('(max-width: 900px)')
@@ -113,12 +127,31 @@ export function PlannerApp() {
   const [accountAuthenticated, setAccountAuthenticated] = useState(false)
   const storageKeyRef = useRef(LEGACY_STORAGE_KEY)
   const cloudLoadRef = useRef(0)
+  // An in-flight edit is not a complete route. Recover the last routed anchors.
+  const workspace = useMemo(() => ({ route, mode, profile, distance, preferences, waypoints: route?.waypoints ?? waypoints }), [route, mode, profile, distance, preferences, waypoints])
+  const activeWorkspaceRef = useRef(workspace)
+  useEffect(() => { activeWorkspaceRef.current = workspace }, [workspace])
+  const recovery = useWorkspaceRecovery(workspace)
+
+  async function recoverWorkspace(restore: boolean) {
+    if (restore && (route || waypoints.length > 0) && !(await askConfirmation(locale === 'de' ? 'Den aktuellen Arbeitsbereich durch den wiederhergestellten Entwurf ersetzen?' : 'Replace the current workspace with the recovered draft?'))) return
+    const draft = recovery.takeRecovery(restore)
+    if (!draft) return
+    cancelPlanning()
+    setRoute(draft.route); setMode(draft.mode); setProfile(draft.profile); setDistance(draft.distance); setPreferences(draft.preferences)
+    dispatchWaypoints({ type: 'reset', waypoints: draft.waypoints })
+    setPlannerOpen(!draft.route); setShowGuide(false)
+    setNotice(locale === 'de' ? 'Entwurf auf diesem Gerät wiederhergestellt. Nicht automatisch in der Cloud gespeichert.' : 'Draft recovered on this device. It has not been saved to the cloud automatically.')
+  }
 
   useEffect(() => {
     const loadCloudState = async (includeLegacy: boolean) => {
       const loadId = ++cloudLoadRef.current
+      const workspaceAtLoad = activeWorkspaceRef.current
       let local = includeLegacy ? readStoredRoutes(LEGACY_STORAGE_KEY) : []
       try {
+        await resolveWorkspaceIdentity().catch(() => undefined)
+        if (loadId !== cloudLoadRef.current) return
         const [response, homeResponse, preferencesResponse] = await Promise.all([
           authenticatedFetch('/api/saved-routes'),
           authenticatedFetch('/api/account/home'),
@@ -132,7 +165,7 @@ export function PlannerApp() {
         if (loadId !== cloudLoadRef.current) return
         local = mergeSavedRoutes(scopedLocal, local)
         storageKeyRef.current = scopedKey
-        localStorage.removeItem(LEGACY_STORAGE_KEY)
+        try { localStorage.removeItem(LEGACY_STORAGE_KEY) } catch { /* Cloud state remains usable when local storage is blocked. */ }
         const remoteById = new Map(remote.map((item) => [item.id, item]))
         const pending = local.filter((item) => {
           const serverRoute = remoteById.get(item.id)
@@ -157,7 +190,7 @@ export function PlannerApp() {
         if (payload.authenticated && preferencesResponse.ok) {
           const defaults = ((await preferencesResponse.json()) as { preferences: AccountPreferences }).preferences
           accountDefaultsRef.current = defaults
-          if (!activeRouteRef.current) { setProfile(defaults.profile); setDistance(defaults.distanceKm); setPreferences({ surface: defaults.surface, climbing: defaults.climbing, safety: defaults.safety }) }
+          if (!activeRouteRef.current && !activeWorkspaceRef.current.waypoints.length && activeWorkspaceRef.current === workspaceAtLoad) { setProfile(defaults.profile); setDistance(defaults.distanceKm); setPreferences({ surface: defaults.surface, climbing: defaults.climbing, safety: defaults.safety }) }
           setSpeedKmh(defaults.speedKmh)
         } else { accountDefaultsRef.current = defaultAccountPreferences; setSpeedKmh(null) }
       } catch {
@@ -169,7 +202,7 @@ export function PlannerApp() {
 
     const hydration = window.setTimeout(() => {
       const local = readStoredRoutes(LEGACY_STORAGE_KEY)
-      setSavedRoutes(local); setShowGuide(!localStorage.getItem(GUIDE_KEY)); setTheme(localStorage.getItem(THEME_KEY) === 'dark' ? 'dark' : 'light')
+      setSavedRoutes(local); setShowGuide(!storedPreference(GUIDE_KEY)); setTheme(storedPreference(THEME_KEY) === 'dark' ? 'dark' : 'light')
       void loadCloudState(true)
     }, 0)
     const handleAuthChange = () => {
@@ -177,7 +210,7 @@ export function PlannerApp() {
       setRouteSyncStates({})
       activeRouteRef.current = null
       historyLoadRef.current++; setHistoryRouteId(null); setRouteVersions([])
-      routeRequestRef.current?.abort(); setRoute(null); setSavedRoutes([]); setHomePoint(null); setShowSaved(false); setAccountAuthenticated(false)
+      routeRequestRef.current?.abort(); routeRequestRef.current = null; setIsPlanning(false); setRoute(null); setSavedRoutes([]); setHomePoint(null); setShowSaved(false); setAccountAuthenticated(false)
       dispatchWaypoints({ type: 'reset' }); storageKeyRef.current = `${STORAGE_KEY_PREFIX}.offline`; setPersistenceState('checking')
       void loadCloudState(false)
     }
@@ -201,19 +234,32 @@ export function PlannerApp() {
 
   async function requestRoute(points: Waypoint[], preserveExisting = false) {
     const valid = points.some((point) => point.kind === 'start') && (mode === 'round-trip' || points.some((point) => point.kind === 'end'))
-    if (!valid) { setNotice(copy.noStart); return }
+    if (!valid) { setNotice(copy.noStart); if (preserveExisting && activeRouteRef.current) dispatchWaypoints({ type: 'rollback', waypoints: activeRouteRef.current.waypoints }); return }
     routeRequestRef.current?.abort()
     const controller = new AbortController(); routeRequestRef.current = controller
+    const previous = activeRouteRef.current
     setIsPlanning(true); setNotice(null)
     try {
-      const response = await fetch('/api/routes/plan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ locale, profile, mode, targetDistanceKm: distance, waypoints: points, preferences }), signal: controller.signal })
-      if (!response.ok) throw new Error('Planning failed')
-      const planned = await response.json() as PlannedRoute
+      const response = await fetch('/api/routes/plan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ locale, profile, mode, targetDistanceKm: distance, waypoints: points, preferences }), signal: AbortSignal.any([controller.signal, AbortSignal.timeout(55_000)]) })
+      const payload: unknown = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(payload && typeof payload === 'object' && 'code' in payload && typeof payload.code === 'string' ? payload.code : 'ROUTE_FAILED')
+      const parsed = plannedRouteSchema.safeParse(payload)
+      if (!parsed.success) throw new Error('ROUTE_QUALITY_FAILED')
+      const planned = parsed.data
       if (routeRequestRef.current !== controller) return
       setRoute((current) => preserveExisting && current ? { ...planned, id: current.id, name: current.name, description: current.description, createdAt: current.createdAt, updatedAt: current.updatedAt, favorite: current.favorite, serverVersion: current.serverVersion } : planned)
-      if (!preserveExisting && planned.waypoints.some((point) => point.kind === 'generated')) dispatchWaypoints({ type: 'reset', waypoints: planned.waypoints })
+      dispatchWaypoints({ type: preserveExisting ? 'replace' : 'reset', waypoints: planned.waypoints })
       setActiveProfileIndex(null); setPlannerOpen(false)
-    } catch (error) { if (!(error instanceof DOMException && error.name === 'AbortError')) { setNotice(locale === 'de' ? 'Die Route konnte nicht berechnet werden.' : 'The route could not be planned.'); if (route) setPlannerOpen(false) } }
+    } catch (error) {
+      if (routeRequestRef.current !== controller || controller.signal.aborted) return
+      const code = error instanceof DOMException && error.name === 'TimeoutError' ? 'ROUTER_TIMEOUT' : error instanceof TypeError ? 'ROUTER_UNAVAILABLE' : error instanceof Error ? error.message : 'ROUTE_FAILED'
+      setNotice(routingErrorMessage(code, locale))
+      if (previous) {
+        // Keep map, markers, export and recovery on the same last complete route.
+        dispatchWaypoints({ type: 'rollback', waypoints: previous.waypoints })
+        setPlannerOpen(false)
+      }
+    }
     finally { if (routeRequestRef.current === controller) { routeRequestRef.current = null; setIsPlanning(false) } }
   }
 
@@ -343,10 +389,10 @@ export function PlannerApp() {
     setSaving(false)
   }
 
-  function cancelPlanning() { routeRequestRef.current?.abort(); routeRequestRef.current = null; setIsPlanning(false); setActiveProfileIndex(null) }
+  function cancelPlanning() { if (routeRequestRef.current && activeRouteRef.current) dispatchWaypoints({ type: 'rollback', waypoints: activeRouteRef.current.waypoints }); routeRequestRef.current?.abort(); routeRequestRef.current = null; setIsPlanning(false); setActiveProfileIndex(null) }
   async function reset() { if (!(await confirmDiscard())) return; cancelPlanning(); setRoute(null); dispatchWaypoints({ type: 'reset' }); setNotice(null); setSyncConflict(false); setPlannerOpen(true); setRouteDetailsExpanded(false); const defaults = accountDefaultsRef.current; setProfile(defaults.profile); setDistance(defaults.distanceKm); setPreferences({ surface: defaults.surface, climbing: defaults.climbing, safety: defaults.safety }) }
   async function changeMode(nextMode: RouteMode) { if (nextMode === mode || !(await confirmDiscard())) return; cancelPlanning(); setMode(nextMode); setRoute(null); dispatchWaypoints({ type: 'commit', waypoints: waypoints.filter((point) => point.kind === 'start') }) }
-  function closeGuide() { setShowGuide(false); localStorage.setItem(GUIDE_KEY, 'true') }
+  function closeGuide() { setShowGuide(false); try { localStorage.setItem(GUIDE_KEY, 'true') } catch { /* The guide can still be dismissed in this session. */ } }
 
   const visibleWaypoints = useMemo(() => waypoints.filter((point) => point.kind !== 'generated'), [waypoints])
   const waypointSummary = useMemo(() => visibleWaypoints.map((point) => `${point.label}: ${point.coordinate[1].toFixed(4)}, ${point.coordinate[0].toFixed(4)}`), [visibleWaypoints])
@@ -412,7 +458,7 @@ export function PlannerApp() {
   }, [hasUnsavedChanges, saving])
   const isGpxImport = route?.provenance.routingEngine === 'GPX Import'
 
-  function toggleTheme() { const next = theme === 'light' ? 'dark' : 'light'; setTheme(next); localStorage.setItem(THEME_KEY, next) }
+  function toggleTheme() { const next = theme === 'light' ? 'dark' : 'light'; setTheme(next); try { localStorage.setItem(THEME_KEY, next) } catch { /* Theme remains usable without persistence. */ } }
   async function importGpx(file: File) {
     const de = locale === 'de'
     try {
@@ -507,24 +553,25 @@ export function PlannerApp() {
 
       <section className="form-section">
         <div className="section-heading"><span>02</span><h2>{copy.bike}</h2></div>
-        <div className="profile-grid">{profiles.map(({ id, icon: Icon }) => <button key={id} className={profile === id ? 'profile-card is-active' : 'profile-card'} aria-pressed={profile === id} onClick={() => setProfile(id)}><Icon size={21} /><span>{copy[id]}</span>{profile === id && <Check size={15} />}</button>)}</div>
+        <div className="profile-grid">{profiles.map(({ id, icon: Icon }) => <button key={id} className={profile === id ? 'profile-card is-active' : 'profile-card'} aria-pressed={profile === id} onClick={() => { cancelPlanning(); setProfile(id) }}><Icon size={21} /><span>{copy[id]}</span>{profile === id && <Check size={15} />}</button>)}</div>
+        {genericRouter && <p className="preview-note">{locale === 'de' ? 'Aktuell ist ein allgemeines Fahrradprofil aktiv. Fahrradtyp und erweiterte Wünsche ändern den Verlauf bei diesem Router nicht.' : 'A general bicycle profile is currently active. Bike type and advanced preferences do not change the route with this router.'}</p>}
       </section>
 
       {mode === 'round-trip' && <section className="form-section distance-section">
         <div className="section-heading"><span>03</span><h2>{copy.distance}</h2><strong>{distance} km</strong></div>
-        <input type="range" min="5" max="250" step="5" value={distance} onChange={(event) => setDistance(Number(event.target.value))} aria-label={`${copy.distance}: ${distance} km`} />
+        <input type="range" min="5" max="250" step="5" value={distance} onChange={(event) => { cancelPlanning(); setDistance(Number(event.target.value)) }} aria-label={`${copy.distance}: ${distance} km`} />
         <div className="range-labels"><span>5 km</span><span>250 km</span></div>
       </section>}
 
       <button className={`advanced-button ${showAdvanced ? 'is-open' : ''}`} onClick={() => setShowAdvanced(!showAdvanced)} aria-expanded={showAdvanced}>{locale === 'de' ? 'Erweiterte Wünsche' : 'Advanced preferences'} <ChevronDown size={17} /></button>
       {showAdvanced && <div className="advanced-panel">
-        <PreferenceSelect label={locale === 'de' ? 'Untergrund' : 'Surface'} value={preferences.surface} onChange={(surface) => setPreferences({ ...preferences, surface })} options={[
+        <PreferenceSelect label={locale === 'de' ? 'Untergrund' : 'Surface'} value={preferences.surface} onChange={(surface) => { cancelPlanning(); setPreferences({ ...preferences, surface }) }} options={[
           ['mostly-paved', locale === 'de' ? 'Möglichst Asphalt' : 'Mostly paved'], ['balanced', locale === 'de' ? 'Ausgewogen' : 'Balanced'], ['unpaved-friendly', locale === 'de' ? 'Mehr Naturwege' : 'More unpaved'],
         ]} />
-        <PreferenceSelect label={locale === 'de' ? 'Steigungen' : 'Climbing'} value={preferences.climbing} onChange={(climbing) => setPreferences({ ...preferences, climbing })} options={[
+        <PreferenceSelect label={locale === 'de' ? 'Steigungen' : 'Climbing'} value={preferences.climbing} onChange={(climbing) => { cancelPlanning(); setPreferences({ ...preferences, climbing }) }} options={[
           ['avoid', locale === 'de' ? 'Eher flach' : 'Prefer flat'], ['balanced', locale === 'de' ? 'Ausgewogen' : 'Balanced'], ['challenge', locale === 'de' ? 'Herausforderung' : 'Challenge'],
         ]} />
-        <PreferenceSelect label={locale === 'de' ? 'Strassenwahl' : 'Road choice'} value={preferences.safety} onChange={(safety) => setPreferences({ ...preferences, safety })} options={[
+        <PreferenceSelect label={locale === 'de' ? 'Strassenwahl' : 'Road choice'} value={preferences.safety} onChange={(safety) => { cancelPlanning(); setPreferences({ ...preferences, safety }) }} options={[
           ['quiet', locale === 'de' ? 'Ruhige Strassen' : 'Quiet roads'], ['balanced', locale === 'de' ? 'Ausgewogen' : 'Balanced'], ['direct', locale === 'de' ? 'Möglichst direkt' : 'Most direct'],
         ]} />
       </div>}
@@ -567,7 +614,15 @@ export function PlannerApp() {
     <AppDialog open={Boolean(route && routeDetailsExpanded && compactViewport)} onOpenChange={(open) => { if (!open) setRouteDetailsExpanded(false) }} label={locale === 'de' ? 'Alle Routendetails' : 'All route details'} className="route-detail-dialog" placement="sheet">
       {route && <><div className="dialog-heading"><div><p className="eyebrow">{locale === 'de' ? 'Routendetails' : 'Route details'}</p><h2>{route.name}</h2></div><Button variant="icon" onClick={() => setRouteDetailsExpanded(false)} aria-label={locale === 'de' ? 'Schliessen' : 'Close'}><X size={18} /></Button></div><RouteDetails route={route} locale={locale} speedKmh={speedKmh} activeIndex={activeProfileIndex} onActiveIndexChange={setActiveProfileIndex} /></>}
     </AppDialog>
-    {showGuide && <Onboarding onClose={closeGuide} locale={locale} />}
+    <AppDialog open={Boolean(recovery.pending) && recovery.offerOpen} onOpenChange={recovery.setOfferOpen} label={locale === 'de' ? 'Entwurf wiederherstellen' : 'Recover draft'}>
+      <h2>{locale === 'de' ? 'Weiterplanen?' : 'Continue planning?'}</h2>
+      <p>{locale === 'de' ? 'Auf diesem Gerät liegt ein Entwurf deiner letzten Sitzung. Er ist noch keine bestätigte Cloud-Sicherung.' : 'A draft from your last session is available on this device. It is not a confirmed cloud backup.'}</p>
+      <div className="onboarding-actions"><Button variant="secondary" onClick={() => recoverWorkspace(false)}>{locale === 'de' ? 'Entwurf verwerfen' : 'Discard draft'}</Button><Button variant="primary" onClick={() => recoverWorkspace(true)}>{locale === 'de' ? 'Wiederherstellen' : 'Recover'}</Button></div>
+    </AppDialog>
+    {recovery.pending && !recovery.offerOpen && !notice && <div className="workspace-notice" role="status"><span>{locale === 'de' ? 'Ein älterer Entwurf liegt zur Wiederherstellung bereit. Entscheide zuerst, bevor dieser Arbeitsbereich automatisch gesichert wird.' : 'An earlier draft is available. Choose what to keep before this workspace can be saved automatically.'}</span><Button variant="secondary" onClick={() => recovery.setOfferOpen(true)}>{locale === 'de' ? 'Entwurf prüfen' : 'Review draft'}</Button></div>}
+    {recovery.storageFailed && !notice && <div className="workspace-notice" role="alert"><span>{locale === 'de' ? 'Die automatische Entwurfsicherung ist fehlgeschlagen. Lass die Route geöffnet und speichere oder exportiere sie.' : 'Automatic draft recovery could not be saved. Keep the route open and save or export it.'}</span></div>}
+    {!notice && !recovery.storageFailed && (route || waypoints.length > 0) && (recovery.storageConflict || recovery.identityUnavailable) && <div className="workspace-notice" role="status"><span>{recovery.storageConflict ? (locale === 'de' ? 'Ein anderes Fenster hat den Wiederherstellungsentwurf geändert. Dieser Stand wird nicht überschrieben. Speichere oder exportiere deine aktuelle Route.' : 'Another window changed the recovery draft. It will not be overwritten. Save or export your current route.') : (locale === 'de' ? 'Automatische Wiederherstellung ist erst nach Bestätigung deiner Konto- oder Gastidentität verfügbar. Verbinde dich erneut und speichere wichtige Routen zusätzlich.' : 'Automatic recovery requires a confirmed account or guest identity. Reconnect and save important routes separately.')}</span></div>}
+    {showGuide && !recovery.pending && <Onboarding onClose={closeGuide} locale={locale} />}
     {notice && <div className="workspace-notice" role="status"><span>{notice}</span><button onClick={() => setNotice(null)} aria-label={locale === 'de' ? 'Hinweis schliessen' : 'Dismiss notice'}><X size={17} /></button></div>}
 
     {confirmation}

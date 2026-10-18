@@ -30,4 +30,10 @@ describe('summarizeHealth', () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
     expect((await checkRouting()).status).toBe('down')
   })
+  it('reports unknown providers and missing Valhalla URLs as down', async () => {
+    vi.stubEnv('ROUTING_PROVIDER', 'typo')
+    expect((await checkRouting()).status).toBe('down')
+    vi.stubEnv('ROUTING_PROVIDER', 'valhalla'); vi.stubEnv('VALHALLA_URL', '')
+    expect((await checkRouting()).status).toBe('down')
+  })
 })

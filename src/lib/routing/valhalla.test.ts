@@ -6,6 +6,19 @@ import { plannedRouteSchema } from '../route-schema'
 afterEach(() => vi.unstubAllGlobals())
 
 describe('Valhalla route attributes', () => {
+  it.each([['road', 'road', .85], ['gravel', 'cross', .35], ['touring', 'hybrid', .35], ['city', 'hybrid', .35]] as const)('passes the %s profile to the real engine contract', async (profile, type, avoidance) => {
+    let options: unknown
+    vi.stubGlobal('fetch', vi.fn(async (_input: string, init?: RequestInit) => {
+      options = JSON.parse(init!.body as string).costing_options.bicycle
+      return Response.json({ error_code: 171 }, { status: 400 })
+    }))
+    await expect(new ValhallaProvider('http://valhalla.test').plan({ locale: 'de', profile, mode: 'one-way', targetDistanceKm: 10, waypoints: [{ id: 'start', kind: 'start', label: 'Start', coordinate: [7.44, 46.95] }, { id: 'end', kind: 'end', label: 'End', coordinate: [7.46, 46.95] }], preferences: { safety: 'quiet', surface: 'balanced', climbing: 'balanced' } })).rejects.toMatchObject({ code: 'NO_ROUTE' })
+    expect(options).toMatchObject({ bicycle_type: type, avoid_bad_surfaces: avoidance })
+  })
+  it('preserves the upstream outage when every round-trip candidate fails', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('connection refused')))
+    await expect(new ValhallaProvider('http://valhalla.test').plan({ locale: 'de', profile: 'road', mode: 'round-trip', targetDistanceKm: 60, waypoints: [{ id: 'start', kind: 'start', label: 'Start', coordinate: [7.44, 46.95] }], preferences: { safety: 'quiet', surface: 'balanced', climbing: 'balanced' } })).rejects.toThrow('connection refused')
+  })
   it('rejects severely retraced automatic loops before requesting extra attributes', async () => {
     const start: [number, number] = [7.4474, 46.948]
     const far: [number, number] = [7.6, 46.948]

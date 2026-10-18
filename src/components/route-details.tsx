@@ -19,7 +19,7 @@ export function RouteDetails({ route, locale, speedKmh, activeIndex, onActiveInd
       </div>
       <div className="route-detail-grid">
         <ElevationProfile route={route} locale={locale} activeIndex={activeIndex} onActiveIndexChange={onActiveIndexChange} />
-        {!condensed && <div className="surface-card">{!hasSurfaceAnalysis ? <div><span>{locale === 'de' ? 'Untergrund' : 'Surface'}</span><strong>{locale === 'de' ? 'Nicht analysiert' : 'Not analysed'}</strong></div> : <><div><span>{locale === 'de' ? 'Untergrund' : 'Surface'}</span><strong>{route.metrics.asphaltPercent}% {locale === 'de' ? 'Asphalt' : 'paved'}</strong></div><div className="surface-track"><i style={{ width: `${route.metrics.asphaltPercent}%` }} /></div><small>{route.metrics.cyclewayPercent}% {locale === 'de' ? 'geschätzter Radweganteil' : 'estimated cycleway share'}</small></>}</div>}
+        {!condensed && <div className="surface-card">{!hasSurfaceAnalysis ? <div><span>{locale === 'de' ? 'Untergrund' : 'Surface'}</span><strong>{locale === 'de' ? 'Nicht analysiert' : 'Not analysed'}</strong></div> : <><div><span>{locale === 'de' ? 'Untergrund' : 'Surface'}</span><strong>{route.metrics.asphaltPercent}% {locale === 'de' ? 'befestigt' : 'paved'}</strong></div><div className="surface-track"><i style={{ width: `${route.metrics.asphaltPercent}%` }} /></div><small>{route.metrics.cyclewayPercent}% {locale === 'de' ? 'geschätzter Radweganteil' : 'estimated cycleway share'}</small></>}</div>}
       </div>
       {!condensed && <>
       {route.warnings.length > 0 && <ul className="warning-list">{route.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}

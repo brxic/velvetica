@@ -9,7 +9,7 @@ export const messages = {
     mapHint: 'Klicke auf die Karte, um den Startpunkt zu setzen.', routeReady: 'Deine Route ist bereit.',
     save: 'Route speichern', export: 'GPX exportieren', clear: 'Neu planen',
     road: 'Rennrad', gravel: 'Gravel', touring: 'Freizeit & Touring', city: 'Alltag & City',
-    distanceLabel: 'Distanz', time: 'Fahrzeit', elevation: 'Höhenmeter', surface: 'Asphalt',
+    distanceLabel: 'Distanz', time: 'Fahrzeit', elevation: 'Höhenmeter', surface: 'Befestigt',
     preview: 'Testvorschau', previewInfo: 'Diese Vorschau verwendet erfundene Wege und Höhenwerte. Sie ist nicht zum Nachfahren geeignet.',
   },
   en: {
@@ -20,7 +20,7 @@ export const messages = {
     mapHint: 'Click the map to choose your starting point.', routeReady: 'Your route is ready.',
     save: 'Save route', export: 'Export GPX', clear: 'Plan new route',
     road: 'Road', gravel: 'Gravel', touring: 'Leisure & touring', city: 'Commuting & city',
-    distanceLabel: 'Distance', time: 'Ride time', elevation: 'Elevation', surface: 'Asphalt',
+    distanceLabel: 'Distance', time: 'Ride time', elevation: 'Elevation', surface: 'Paved',
     preview: 'Test preview', previewInfo: 'This preview uses simulated paths and elevation values. Do not use it for riding.',
   },
 } as const satisfies Record<Locale, Record<string, string>>
