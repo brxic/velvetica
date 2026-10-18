@@ -9,6 +9,7 @@
   --line: #dfe1e4;
   --red: #e00112;
   --red-bright: #fd0002;
+  --red-soft: color-mix(in srgb, var(--red) 10%, var(--card));
   --success: #17653c;
   --warning: #795100;
   --space-1: .25rem;

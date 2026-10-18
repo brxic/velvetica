@@ -3,7 +3,7 @@ import type { MetadataRoute } from 'next'
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: '/',
-    name: 'Velvetia: Plan less. Ride more.',
+    name: 'Velvetia',
     short_name: 'Velvetia',
     description: 'Plane Fahrradrouten in der Schweiz und passe sie auf der Karte an.',
     start_url: '/',

@@ -1,13 +1,9 @@
 'use client'
 
-import Image from 'next/image'
 import { Copy } from 'lucide-react'
-import { Bike, Bookmark, Check, ChevronDown, CircleHelp, FileUp, History, Home, Languages, MapPin, Maximize2, Menu, Minimize2, Moon, MousePointer2, Navigation, Redo2, RotateCcw, Route as RouteIcon, Search, Sparkles, Star, Sun, Trash2, Undo2, X } from 'lucide-react'
+import { Bike, Bookmark, Check, ChevronDown, CircleHelp, FileUp, History, Home, Languages, MapPin, Maximize2, SlidersHorizontal, Minimize2, Moon, MousePointer2, Navigation, Redo2, RotateCcw, Route as RouteIcon, Search, Sparkles, Star, Sun, Trash2, Undo2, X } from 'lucide-react'
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
-import logoLight from '../../velvetia-full-light.png'
-import logoDark from '../../velvetia-full-dark.png'
-import markLight from '../../velvetia-light.png'
-import markDark from '../../velvetia-dark.png'
+import { BrandLogo } from './brand-logo'
 import type { BikeProfile, HomePoint, Locale, PlannedRoute, RouteMode, RoutePreferences, RouteVersion, Waypoint } from '@/lib/domain'
 import { AUTH_STATE_EVENT, authenticatedFetch } from '@/lib/auth-client'
 import { GpxImportError, MAX_GPX_FILE_BYTES, parseGpx } from '@/lib/gpx-import'
@@ -453,12 +449,11 @@ export function PlannerApp() {
 
   return <main id="planner" className={`app-shell theme-${theme} ${plannerOpen ? 'has-planner' : ''} ${route && routeDetailsExpanded && !compactViewport ? 'has-expanded-route' : ''}`}>
     <a href="#planner-controls" className="skip-link">{locale === 'de' ? 'Zur Routenplanung' : 'Skip to route planning'}</a>
-    <MapCanvas activeRoute={route} savedRoutes={savedRoutes} waypoints={waypoints} onMapClick={handleMapClick} onWaypointMove={handleWaypointMove} onRouteShape={handleRouteShape} activeProfileIndex={activeProfileIndex} onActiveProfileIndexChange={setActiveProfileIndex} locale={locale} />
+    <MapCanvas theme={theme} activeRoute={route} savedRoutes={savedRoutes} waypoints={waypoints} onMapClick={handleMapClick} onWaypointMove={handleWaypointMove} onRouteShape={handleRouteShape} activeProfileIndex={activeProfileIndex} onActiveProfileIndexChange={setActiveProfileIndex} locale={locale} />
 
     <header className="topbar">
       <button className="brand" onClick={reset} aria-label={locale === 'de' ? 'Velvetia Startseite' : 'Velvetia home'}>
-        <Image className="brand-full" src={theme === 'light' ? logoLight : logoDark} alt="Velvetia" priority />
-        <Image className="brand-mark" src={theme === 'light' ? markLight : markDark} alt="" priority />
+        <BrandLogo theme={theme} />
       </button>
       <span className="brand-slogan">Plan less. Ride more.</span>
       <nav aria-label={locale === 'de' ? 'Hauptnavigation' : 'Main navigation'}>
@@ -474,7 +469,7 @@ export function PlannerApp() {
       </div>
     </header>
 
-    <button className={`mobile-panel-toggle ${plannerOpen ? 'is-panel-open' : ''}`} aria-expanded={plannerOpen} aria-controls="planner-controls" onClick={() => setPlannerOpen(!plannerOpen)} aria-label={plannerOpen ? (locale === 'de' ? 'Planungsmenü schliessen' : 'Close planning menu') : (locale === 'de' ? 'Planungsmenü öffnen' : 'Open planning menu')}>{plannerOpen ? <X size={18} /> : <Menu size={18} />}<span>{locale === 'de' ? (plannerOpen ? 'Karte' : 'Planung') : (plannerOpen ? 'Map' : 'Plan')}</span></button>
+    <button className={`mobile-panel-toggle ${plannerOpen ? 'is-panel-open' : ''}`} aria-expanded={plannerOpen} aria-controls="planner-controls" onClick={() => setPlannerOpen(!plannerOpen)} aria-label={plannerOpen ? (locale === 'de' ? 'Planungsmenü schliessen' : 'Close planning menu') : (locale === 'de' ? 'Planungsmenü öffnen' : 'Open planning menu')}><SlidersHorizontal size={17} aria-hidden="true" /><span>{locale === 'de' ? 'Planung' : 'Plan'}</span><ChevronDown className="panel-toggle-chevron" size={14} aria-hidden="true" /></button>
 
     {route ? <div className="route-edit-hint" role="note"><MousePointer2 size={17} /><span>{locale === 'de' ? (compactViewport ? 'Linie antippen oder ziehen' : 'Route bearbeiten: Linie ziehen oder antippen') : (compactViewport ? 'Tap or drag the line' : 'Edit route: drag or tap the line')}</span></div> : null}
 
@@ -549,10 +544,10 @@ export function PlannerApp() {
       {savedRoutes.length === 0 ? <div className="empty-state"><Bookmark size={28} /><h3>{locale === 'de' ? 'Noch keine gespeicherten Routen' : 'No saved routes yet'}</h3><p>{locale === 'de' ? 'Gespeicherte Routen findest du hier und auf der Karte.' : 'Routes you save appear here and on the map.'}</p><button className="primary-button" onClick={() => { setShowSaved(false); setPlannerOpen(true) }}>{copy.calculate}</button></div> : visibleSavedRoutes.length === 0 ? <div className="empty-state"><Search size={28} /><h3>{locale === 'de' ? 'Keine passenden Routen' : 'No matching routes'}</h3><button className="account-link" onClick={() => { setSavedSearch(''); setSavedProfile('all'); setFavoritesOnly(false); setMaxSavedDistance(500) }}>{locale === 'de' ? 'Filter zurücksetzen' : 'Reset filters'}</button></div> : <div className="saved-list">{visibleSavedRoutes.map((saved) => <article key={saved.id}>
           <button className="saved-main" onClick={() => openSavedRoute(saved)}><span className="saved-route-icon"><RouteThumbnail route={saved} /></span><span><strong>{saved.name}</strong><small>{copy[saved.profile]} · {saved.metrics.distanceKm} km · {formatDuration(saved.metrics.durationMinutes)}</small></span><ChevronDown className="saved-chevron" /></button>
         <div className="saved-actions">
-          <button className={saved.favorite ? 'is-favorite' : ''} onClick={() => void toggleFavorite(saved)} aria-label={locale === 'de' ? 'Favorit umschalten' : 'Toggle favorite'}><Star size={15} fill={saved.favorite ? 'currentColor' : 'none'} /></button>
-          <button onClick={() => void showVersions(saved.id)} aria-expanded={historyRouteId === saved.id} aria-label={locale === 'de' ? 'Versionsverlauf' : 'Version history'}><History size={15} /></button>
-          <button onClick={() => void duplicateRoute(saved)} aria-label={locale === 'de' ? 'Route duplizieren' : 'Duplicate route'}><Copy size={15} /></button>
-          <button className={pendingDelete === saved.id ? 'is-delete-confirm' : ''} onClick={() => { if (pendingDelete === saved.id) void deleteRoute(saved.id); else setPendingDelete(saved.id) }} aria-label={pendingDelete === saved.id ? (locale === 'de' ? 'Löschen bestätigen' : 'Confirm delete') : (locale === 'de' ? 'Route löschen' : 'Delete route')}><Trash2 size={15} /></button>
+          <Button variant="icon" className={saved.favorite ? 'is-favorite' : ''} aria-pressed={Boolean(saved.favorite)} onClick={() => void toggleFavorite(saved)} aria-label={locale === 'de' ? 'Favorit umschalten' : 'Toggle favorite'}><Star size={17} fill={saved.favorite ? 'currentColor' : 'none'} /></Button>
+          <Button variant="icon" onClick={() => void showVersions(saved.id)} aria-expanded={historyRouteId === saved.id} aria-label={locale === 'de' ? 'Versionsverlauf' : 'Version history'}><History size={17} /></Button>
+          <Button variant="icon" onClick={() => void duplicateRoute(saved)} aria-label={locale === 'de' ? 'Route duplizieren' : 'Duplicate route'}><Copy size={17} /></Button>
+          <Button variant="icon" className={`saved-delete ${pendingDelete === saved.id ? 'is-delete-confirm' : ''}`} onClick={() => { if (pendingDelete === saved.id) void deleteRoute(saved.id); else setPendingDelete(saved.id) }} aria-label={pendingDelete === saved.id ? (locale === 'de' ? 'Löschen bestätigen' : 'Confirm delete') : (locale === 'de' ? 'Route löschen' : 'Delete route')}>{pendingDelete === saved.id ? <Check size={17} /> : <Trash2 size={17} />}</Button>
         </div>
         {historyRouteId === saved.id ? <div className="version-history">{historyLoading ? <span>{locale === 'de' ? 'Versionen werden geladen …' : 'Loading versions …'}</span> : routeVersions.length ? routeVersions.map((version) => <button key={version.version} onClick={() => void restoreVersion(version)}><span><b>v{version.version}</b>{new Date(version.savedAt).toLocaleString(locale === 'de' ? 'de-CH' : 'en-GB')}</span><RotateCcw size={14} /><span className="sr-only">{locale === 'de' ? 'wiederherstellen' : 'restore'}</span></button>) : <span>{locale === 'de' ? 'Noch keine Serverversionen.' : 'No server versions yet.'}</span>}</div> : null}
       </article>)}</div>}

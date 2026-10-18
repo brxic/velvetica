@@ -11,7 +11,7 @@ async function sources(directory, include = /\.(?:tsx?|css)$/) {
 }
 const hash = createHash('sha256')
 const logos = (await readdir('.')).filter((name) => /^velvetia.*\.(?:png|ico|svg)$/.test(name))
-for (const file of [...await sources('src'), ...await sources('public', /\.(?:png|ico|html)$/), ...await sources('fonts', /\.woff2$/), ...logos, 'package-lock.json', 'next.config.ts', 'public/sw.js'].sort()) {
+for (const file of [...await sources('src'), ...await sources('public', /\.(?:png|ico|svg|html)$/), ...await sources('fonts', /\.woff2$/), ...logos, 'package-lock.json', 'next.config.ts', 'public/sw.js'].sort()) {
   hash.update(file); hash.update(await readFile(resolve(file)))
 }
 await writeFile(resolve('public/pwa-build.js'), `// Velvetia build: ${hash.digest('hex')}\n`)

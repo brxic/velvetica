@@ -1,12 +1,13 @@
 'use client'
 
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import * as maplibregl from 'maplibre-gl'
 import type { GeoJSONSource, Map as MapLibreMap, MapMouseEvent, Marker } from 'maplibre-gl'
 import type { Coordinate, Locale, PlannedRoute, Waypoint } from '@/lib/domain'
 import { SWITZERLAND } from '@/lib/domain'
 import { analyzeRoute, gradeGradientStops } from '@/lib/route-analysis'
 import { mapInsets } from '@/lib/map-layout'
+import { darkBasemapPaint, originalBasemapPaint, type MapPaintPatch, type MapTheme } from '@/lib/map-theme'
 
 type Props = {
   activeRoute: PlannedRoute | null
@@ -19,11 +20,15 @@ type Props = {
   onActiveProfileIndexChange: (index: number | null) => void
   locale: Locale
   readOnly?: boolean
+  theme?: MapTheme
 }
 
 const emptyCollection = (): GeoJSON.FeatureCollection => ({ type: 'FeatureCollection', features: [] })
 
-export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onWaypointMove, onRouteShape, activeProfileIndex, onActiveProfileIndexChange, locale, readOnly = false }: Props) {
+export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onWaypointMove, onRouteShape, activeProfileIndex, onActiveProfileIndexChange, locale, readOnly = false, theme = 'light' }: Props) {
+  const [mapStatus, setMapStatus] = useState<'loading' | 'ready' | 'error'>('loading')
+  const themeRef = useRef(theme)
+  const themeUpdateRef = useRef<() => void>(() => {})
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
   const fittedGeometryRef = useRef<PlannedRoute['geometry'] | null>(null)
@@ -49,6 +54,7 @@ export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onW
   useEffect(() => { activeRouteRef.current = activeRoute }, [activeRoute])
   useEffect(() => { waypointsRef.current = waypoints }, [waypoints])
   useEffect(() => { profileHandlerRef.current = onActiveProfileIndexChange }, [onActiveProfileIndexChange])
+  useEffect(() => { themeRef.current = theme; themeUpdateRef.current() }, [theme])
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return
@@ -60,6 +66,41 @@ export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onW
       zoom: SWITZERLAND.defaultZoom,
       attributionControl: false,
     })
+    let lightPaint: MapPaintPatch[] = []
+    let darkPaint: MapPaintPatch[] = []
+    let appliedTheme: MapTheme | null = null
+    const setPaint = (id: string, property: string, value: unknown) => map.setPaintProperty(id, property as Parameters<MapLibreMap['setPaintProperty']>[1], value as Parameters<MapLibreMap['setPaintProperty']>[2])
+    const applyOverlayTheme = () => {
+      if (map.getLayer('active-route-casing')) {
+        map.setPaintProperty('active-route-casing', 'line-color-transition', { duration: 0 })
+        map.setPaintProperty('active-route-casing', 'line-color', themeRef.current === 'dark' ? '#10171d' : '#ffffff')
+      }
+      if (map.getLayer('saved-routes-line')) map.setPaintProperty('saved-routes-line', 'line-color', themeRef.current === 'dark' ? '#b1b9c0' : '#676a70')
+    }
+    const applyTheme = () => {
+      if (!darkPaint.length || appliedTheme === themeRef.current) return
+      const targetTheme = themeRef.current
+      for (const { id, paint } of themeRef.current === 'dark' ? darkPaint : lightPaint) {
+        for (const [property, value] of Object.entries(paint)) {
+          // Independent colour fades produce pale halos and patchy tiles while
+          // switching between opposite palettes. Switch the map paint directly.
+          setPaint(id, `${property}-transition`, { duration: 0 })
+          setPaint(id, property, value)
+        }
+      }
+      appliedTheme = targetTheme
+      applyOverlayTheme()
+      map.once('idle', () => { if (themeRef.current === targetTheme) containerRef.current?.setAttribute('data-map-theme', targetTheme) })
+    }
+    themeUpdateRef.current = applyTheme
+    map.once('style.load', () => {
+      const layers = map.getStyle().layers
+      darkPaint = darkBasemapPaint(layers)
+      lightPaint = originalBasemapPaint(layers, darkPaint)
+      applyTheme()
+      setMapStatus('ready')
+    })
+    map.on('error', (event) => { if (!('sourceId' in event) && !darkPaint.length) setMapStatus('error') })
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'bottom-right')
     map.addControl(new maplibregl.AttributionControl({ compact: true, customAttribution: SWITZERLAND.attribution }), 'bottom-right')
     let suppressNextClick = false
@@ -102,7 +143,7 @@ export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onW
       insertionIndex = routeInsertionIndex(routeIndex, coordinates)
       const element = document.createElement('div'); element.className = 'route-drag-marker'
       dragMarker = new maplibregl.Marker({ element, anchor: 'center' }).setLngLat(event.lngLat).addTo(map)
-      map.dragPan.disable(); map.getCanvas().style.cursor = 'grabbing'
+      map.dragPan.disable(); map.getCanvas().style.cursor = 'url("/map-drag.svg") 14 14, grabbing'
       map.on('mousemove', moveRouteDrag); map.on('mouseup', finishRouteDrag)
     }
     map.on('load', () => {
@@ -113,7 +154,8 @@ export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onW
       map.addLayer({ id: 'active-route-line', type: 'line', source: 'active-route', paint: { 'line-gradient': ['interpolate', ['linear'], ['line-progress'], 0, '#e00112', 1, '#e00112'], 'line-width': 5, 'line-opacity': 1 } })
       map.addSource('profile-position', { type: 'geojson', data: emptyCollection() })
       map.addLayer({ id: 'profile-position-dot', type: 'circle', source: 'profile-position', paint: { 'circle-radius': 7, 'circle-color': '#e00112', 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 3 } })
-      map.on('mouseenter', 'active-route-line', () => { map.getCanvas().style.cursor = readOnly ? 'crosshair' : 'grab' })
+      applyOverlayTheme()
+      map.on('mouseenter', 'active-route-line', () => { map.getCanvas().style.cursor = readOnly ? 'url("/map-crosshair.svg") 14 14, crosshair' : 'url("/map-drag.svg") 14 14, grab' })
       map.on('mousemove', 'active-route-line', (event) => {
         const route = activeRouteRef.current
         if (route) {
@@ -138,7 +180,7 @@ export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onW
       map.on('click', (event) => { if (!suppressNextClick) clickHandlerRef.current(event.lngLat.lng, event.lngLat.lat) })
     })
     mapRef.current = map
-    return () => { dragMarker?.remove(); map.remove(); mapRef.current = null }
+    return () => { themeUpdateRef.current = () => {}; dragMarker?.remove(); map.remove(); mapRef.current = null }
   }, [readOnly])
 
   useEffect(() => {
@@ -255,5 +297,5 @@ export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onW
     })
   }, [waypoints, readOnly])
 
-  return <div ref={containerRef} className="map-canvas" aria-label={locale === 'de' ? 'Interaktive Karte der Schweiz' : 'Interactive map of Switzerland'} />
+  return <><div ref={containerRef} className="map-canvas" aria-label={locale === 'de' ? 'Interaktive Karte der Schweiz' : 'Interactive map of Switzerland'} />{mapStatus !== 'ready' ? <div className="map-status" aria-live="polite" aria-atomic="true">{mapStatus === 'loading' ? <span className="spinner" aria-hidden="true" /> : null}<span>{mapStatus === 'loading' ? (locale === 'de' ? 'Karte wird geladen' : 'Loading map') : (locale === 'de' ? 'Karte nicht erreichbar. Prüfe deine Verbindung.' : 'Map unavailable. Check your connection.')}</span></div> : null}</>
 }
