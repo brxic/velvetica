@@ -10,7 +10,7 @@ export const messages = {
     save: 'Route speichern', export: 'GPX exportieren', clear: 'Neu planen',
     road: 'Rennrad', gravel: 'Gravel', touring: 'Freizeit & Touring', city: 'Alltag & City',
     distanceLabel: 'Distanz', time: 'Fahrzeit', elevation: 'Höhenmeter', surface: 'Asphalt',
-    preview: 'Lokale Vorschau', previewInfo: 'Der Preview-Router zeigt den Bedienablauf. Für straßengenaues Routing wird Valhalla angeschlossen.',
+    preview: 'Testvorschau', previewInfo: 'Diese Vorschau verwendet erfundene Wege und Höhenwerte. Sie ist nicht zum Nachfahren geeignet.',
   },
   en: {
     planner: 'Route planner', saved: 'My routes', guide: 'How it works',
@@ -21,7 +21,7 @@ export const messages = {
     save: 'Save route', export: 'Export GPX', clear: 'Plan new route',
     road: 'Road', gravel: 'Gravel', touring: 'Leisure & touring', city: 'Commuting & city',
     distanceLabel: 'Distance', time: 'Ride time', elevation: 'Elevation', surface: 'Asphalt',
-    preview: 'Local preview', previewInfo: 'The preview router demonstrates the workflow. Valhalla will provide road-accurate routing.',
+    preview: 'Test preview', previewInfo: 'This preview uses simulated paths and elevation values. Do not use it for riding.',
   },
 } as const satisfies Record<Locale, Record<string, string>>
 

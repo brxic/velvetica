@@ -3,7 +3,7 @@
 ## Verhalten
 
 - Ein Update übernimmt nicht mehr sofort die Kontrolle. Die Statusleiste bietet „Jetzt aktualisieren“ an. Nicht gesicherte Routen, gesetzte Planungspunkte und laufende Planungs-/Speichervorgänge verhindern den Reload. Vor dem tatsächlichen Reload wird erneut geprüft.
-- Weitere offene Fenster/Tabs derselben App verhindern die erzwungene Aktivierung. Erst diese schliessen, dann erneut aktualisieren. Das ist bewusst konservativ; der Worker kann deren Entwürfe nicht sicher beurteilen.
+- Weitere offene Fenster oder Tabs derselben App verhindern die Aktivierung per Update-Button. Erst diese schliessen, dann erneut aktualisieren. Der Worker prüft deren Entwürfe nicht.
 - Bei Verbindungsverlust bleibt der aktuelle Arbeitsbereich geöffnet. Lokales Speichern meldet nicht „Cloud synchronisiert“. Die Netzwerk-Rückkehr ist nur ein Hinweis: Ob die Cloud erreichbar und der Inhalt synchronisiert ist, zeigen weiterhin die jeweiligen Routen-/Fehlerzustände.
 - Die Statusleiste reserviert gemessenen Platz. Karte, Planungsbereich und Routenzusammenfassung berücksichtigen diesen auch im kurzen mobilen Viewport. Vollständige Details bleiben separat erreichbar.
 
@@ -13,7 +13,7 @@
 
 Nur die öffentliche Planer-HTML-Seite `/` ohne Query-String wird bei erfolgreicher Navigation für einen späteren Offline-Aufruf gespeichert. Dazu kommen geladene gehashte Next-Assets, öffentliche Icons und die `.mjs`-Dateien von MapLibre. APIs, Auth-Endpunkte, RSC-Anfragen, Freigabe-HTML und externe Karten werden nicht gespeichert. Bei Offline-Navigation zu einer Freigabe erscheint die Offline-Seite, niemals eine möglicherweise widerrufene alte Freigabe aus einem Cache.
 
-Das ist **keine Offline-Kartenplattform**. Neuplanung, Anmeldung, neue Höhenabfragen und Cloud-Zugriffe brauchen Internet. Ein Offline-Kaltstart ist nur mit zuvor geladenem Shell-/Asset-Cache möglich; sonst erscheint die Offline-Seite. Kontogebundene lokale Daten werden nicht ohne geklärte Identität als Gastbibliothek eingeblendet. Browser können lokale Daten und Caches löschen; wichtige Touren zusätzlich als GPX exportieren.
+Neuplanung, Karten, Anmeldung, neue Höhenabfragen und Cloud-Zugriffe brauchen Internet. Ein Offline-Kaltstart ist nur mit zuvor geladenem Shell-/Asset-Cache möglich; sonst erscheint die Offline-Seite. Kontogebundene lokale Daten werden nicht ohne geklärte Identität als Gastbibliothek eingeblendet. Browser können lokale Daten und Caches löschen; wichtige Touren zusätzlich als GPX exportieren.
 
 ## Build-Erkennung
 

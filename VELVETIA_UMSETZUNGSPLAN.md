@@ -1,13 +1,15 @@
-# Velvetia – technischer Umsetzungsplan
+# Velvetia: technischer Umsetzungsplan
 
 **Produkt:** Velvetia (Velo + Helvetia)  
 **Planungsstand:** 15. August 2026  
 **Initiale Zielregion:** Schweiz und grenznahes Ausland  
 **Dokumentstatus:** Entscheidungsgrundlage; Kosten und externe Limits vor Beschaffung erneut prüfen
 
-## 1. Executive Summary
+Dieser Plan dokumentiert die Vorschläge vom 15. August 2026. Er beschreibt auch nicht implementierte Funktionen und inzwischen geänderte Technikentscheidungen. Den aktuellen Funktionsumfang und die Einrichtung beschreiben [README.md](./README.md) und die Anleitungen in `docs/`.
 
-Velvetia soll als **modularer Monolith mit separat betriebenem Routingdienst und asynchronen Workern** entstehen. Diese Architektur ist für ein Greenfield-Produkt schneller und betrieblich einfacher als Microservices, hält aber die fachlich volatilen Teile – Routing, externe Datenquellen, KI und Hintergrundberechnungen – über klare Ports austauschbar.
+## 1. Überblick
+
+Vorgeschlagen ist ein modularer Monolith mit separat betriebenem Routingdienst und asynchronen Workern. Routing, externe Datenquellen, KI und Hintergrundberechnungen erhalten getrennte Schnittstellen, damit sie später ausgetauscht werden können.
 
 Die empfohlene technische Basis lautet:
 
@@ -607,7 +609,7 @@ Hauptkostentreiber sind Routing-CPU/RAM, Vector-Tile-Traffic, häufige Alternati
 
 ## 15. Phasenplan und Gates
 
-### Phase 0 – Machbarkeit und Anbieterentscheidung (4–6 Wochen)
+### Phase 0: Machbarkeit und Anbieterentscheidung (4–6 Wochen)
 
 **Lieferobjekte:** klickbarer Kartenprototyp, Routing-Benchmark, Höhenprofil, Drag-Reroute, GPX-Export, Daten-/Lizenzregister, Kostenmessung.
 
@@ -626,31 +628,31 @@ Hauptkostentreiber sind Routing-CPU/RAM, Vector-Tile-Traffic, häufige Alternati
 
 **Gate:** Kernrouting erreicht Referenzqualität, P95-Ziele auf Zielhardware, Lizenzregister ohne ungelösten Blocker, monatlicher Beta-Kostenrahmen plausibel. Sonst Region/Profile reduzieren.
 
-### Phase 1 – Routenplanungskern (8–12 Wochen)
+### Phase 1: Routenplanungskern (8–12 Wochen)
 
 One-Way/Rundtour, Road/Gravel, Varianten, Karte, Wegpunkte, Drag-Reroute, Höhe, Oberfläche, Steigung, Warnungen und GPX. Gastentwürfe laufen zeitlich begrenzt.
 
 **Gate:** alle 12 Kern-Akzeptanzkriterien, Referenzregression, mobile Bedienung und GPX-Interoperabilität bestanden.
 
-### Phase 2 – Konten und Speicherung (4–6 Wochen)
+### Phase 2: Konten und Speicherung (4–6 Wochen)
 
 Auth, Profil, unveränderliche Routenversionen, My Routes, Duplizieren, Löschen, erneuter Export, Backup-/Restore-Test.
 
-### Phase 3 – KI-gestützte Planung (3–5 Wochen)
+### Phase 3: KI-gestützte Planung (3–5 Wochen)
 
 Freitext → bestätigbares Schema, Konflikte/Rückfragen, faktengestützte Erklärungen und begrenzte sprachliche Änderungsbefehle.
 
 **Gate:** Extraktions-Eval ≥ 95 % korrekte harte Kriterien; 0 erfundene Geo-Fakten in Testset; Kostenlimit wirksam.
 
-### Phase 4 – Sicherheits- und Wetterausbau (5–8 Wochen)
+### Phase 4: Sicherheits- und Wetterausbau (5–8 Wochen)
 
 Konfidenzmodell, ASTRA-Integration, Fachreview, Prognose entlang der Zeitachse, Warnungen. Optimierung erst nach Offline-Evaluation.
 
-### Phase 5 – Versorgung (4–7 Wochen)
+### Phase 5: Versorgung (4–7 Wochen)
 
 POI-Korridor, Öffnungszeiten, kantonale Feiertage, Umwegvergleich, Stoppeinfügung und Zeitachse.
 
-### Phase 6 – Route Art (6–10+ Wochen, experimentell)
+### Phase 6: Route Art (6–10+ Wochen, experimentell)
 
 Zeicheneditor, Transformation, Graph-Matching, Varianten und Ähnlichkeitsmetrik. Nur nach Spike-Go.
 
@@ -658,7 +660,7 @@ Zeicheneditor, Transformation, Graph-Matching, Varianten und Ähnlichkeitsmetrik
 
 Schätzung in idealisierten Personentagen (PT) inklusive Entwicklung und automatisierter Tests, exklusive Spike-Ungewissheit. Priorität: P0 zwingend, P1 wichtig, P2 später.
 
-### Epic E0 – Plattform und Daten (P0, 25–40 PT)
+### Epic E0: Plattform und Daten (P0, 25–40 PT)
 
 | Story / Task | Akzeptanzkriterium | PT | Abhängigkeit |
 |---|---|---:|---|
@@ -669,7 +671,7 @@ Schätzung in idealisierten Personentagen (PT) inklusive Entwicklung und automat
 | Quellen-/Lizenzregister | jede Quelle mit Terms, Stand, Attribution | 3–5 | — |
 | Telemetrie-Basis | Trace eines Jobs Ende-zu-Ende | 3–5 | API |
 
-### Epic E1 – Klassische Planung (P0, 30–45 PT)
+### Epic E1: Klassische Planung (P0, 30–45 PT)
 
 | User Story | Akzeptanzkriterium | PT | Abhängigkeit |
 |---|---|---:|---|
@@ -680,7 +682,7 @@ Schätzung in idealisierten Personentagen (PT) inklusive Entwicklung und automat
 | Via-/Pflichtpunkte | Reihenfolge und harte Einbindung | 4–6 | One-Way |
 | einen Vorschlag bewerten | Auswahl und Gründe sind nachvollziehbar | 4–7 | Scoring |
 
-### Epic E2 – Analyse und Editor (P0, 30–45 PT)
+### Epic E2: Analyse und Editor (P0, 30–45 PT)
 
 | User Story | Akzeptanzkriterium | PT | Abhängigkeit |
 |---|---|---:|---|
@@ -691,7 +693,7 @@ Schätzung in idealisierten Personentagen (PT) inklusive Entwicklung und automat
 | Anstiege | Fensterdefinition und Kennzahlen korrekt | 4–6 | DEM |
 | Warnungen/Provenienz | Grund, Segment, Konfidenz, Stand | 4–7 | Analyse |
 
-### Epic E3 – GPX (P0, 10–16 PT)
+### Epic E3: GPX (P0, 10–16 PT)
 
 | User Story | Akzeptanzkriterium | PT | Abhängigkeit |
 |---|---|---:|---|
@@ -699,7 +701,7 @@ Schätzung in idealisierten Personentagen (PT) inklusive Entwicklung und automat
 | Gerätekompatibilität | definierte manuelle Importmatrix bestanden | 2–3 | Export |
 | GPX importieren (P1) | sicher geparst, Original unverändert | 4–7 | Storage |
 
-### Epic E4 – Konten und Routenverwaltung (P0, 24–36 PT)
+### Epic E4: Konten und Routenverwaltung (P0, 24–36 PT)
 
 | User Story | Akzeptanzkriterium | PT | Abhängigkeit |
 |---|---|---:|---|
@@ -710,7 +712,7 @@ Schätzung in idealisierten Personentagen (PT) inklusive Entwicklung und automat
 | Duplizieren/Löschen | Autorisierung und Soft Delete | 3–4 | Speicherung |
 | Profilstandards | neue Planung übernimmt Defaults | 2–4 | Profil |
 
-### Epic E5 – KI (P1, 18–28 PT)
+### Epic E5: KI (P1, 18–28 PT)
 
 | User Story | Akzeptanzkriterium | PT | Abhängigkeit |
 |---|---|---:|---|
@@ -720,7 +722,7 @@ Schätzung in idealisierten Personentagen (PT) inklusive Entwicklung und automat
 | Route erklären | nur übergebene Fakten, Zahlen korrekt | 3–5 | E1/E2 |
 | Sprachänderung | begrenzte Befehle → überprüfbare Operation | 4–6 | Editor |
 
-### Epic E6 – Sicherheit und Wetter (P1, 25–40 PT)
+### Epic E6: Sicherheit und Wetter (P1, 25–40 PT)
 
 | User Story | Akzeptanzkriterium | PT | Abhängigkeit |
 |---|---|---:|---|
@@ -730,7 +732,7 @@ Schätzung in idealisierten Personentagen (PT) inklusive Entwicklung und automat
 | Wetterzeitachse | Modelllauf und Unsicherheit sichtbar | 5–8 | MeteoSwiss |
 | Wetterwarnung | Schwellen fachlich dokumentiert | 4–9 | Zeitachse |
 
-### Epic E7 – Versorgung (P1, 22–34 PT)
+### Epic E7: Versorgung (P1, 22–34 PT)
 
 | User Story | Akzeptanzkriterium | PT | Abhängigkeit |
 |---|---|---:|---|
@@ -740,7 +742,7 @@ Schätzung in idealisierten Personentagen (PT) inklusive Entwicklung und automat
 | Vorschläge | Distanz-/Wasserregel nachvollziehbar | 4–7 | Zeitachse |
 | Versorgungslücken | Warnung nur evidenzbasiert formuliert | 3–5 | POIs |
 
-### Epic E8 – Route Art (P2, 30–50+ PT)
+### Epic E8: Route Art (P2, 30–50+ PT)
 
 Zeichnen/Transformieren (7–10), Geometrievorverarbeitung (4–6), Graph-Projektion/Optimierung (10–18), Varianten/Ähnlichkeit (5–8), Editorintegration (4–8). Aufwand bleibt bis Spike bewusst als Bandbreite.
 

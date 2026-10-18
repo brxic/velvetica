@@ -1,6 +1,6 @@
 # Beta workspace: delivered scope and verification
 
-The workspace keeps Velvetia's supplied logos, Foundry fonts and red/charcoal palette. The redesign uses quieter surfaces, route previews in the library, larger distance/time figures, visible focus states, trapped dialog focus, and compact non-scrolling mobile route details. Account settings and the route library scroll independently when their content needs it.
+This document records the account and route-library changes tested on 17 October 2026. Later frontend and PWA changes are covered in [FRONTEND_SYSTEM.md](./FRONTEND_SYSTEM.md) and [PWA_RELIABILITY.md](./PWA_RELIABILITY.md). The supplied logos, Foundry fonts and brand colours remain unchanged.
 
 ## Account and routes
 
@@ -54,7 +54,7 @@ The remaining npm advisory chain concerns the development-only `braces` dependen
 
 The Supabase advisor also reports that [leaked-password protection](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection) is disabled in the project's Auth configuration. This account setting was not changed as part of the code implementation.
 
-## Verification record — 17 October 2026
+## Verification record, 17 October 2026
 
 - 61 unit, component and API tests pass.
 - 16 Playwright browser checks pass across desktop and mobile, using synthetic provider contracts where indicated above.

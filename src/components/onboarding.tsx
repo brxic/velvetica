@@ -8,20 +8,20 @@ import { AppDialog } from './ui/dialog'
 const guides = {
   de: [
     { icon: MapPin, title: 'Start setzen', text: 'Klicke auf die Karte oder nutze die Ortssuche, um deinen Startpunkt zu wählen.' },
-    { icon: Route, title: 'Tour beschreiben', text: 'Wähle Rundtour oder One-Way, Fahrradtyp und deine gewünschte Distanz.' },
-    { icon: MousePointer2, title: 'Einfach anpassen', text: 'Ziehe die farbige Routenlinie an eine neue Stelle oder tippe sie an. Velvetia setzt dort automatisch einen Bearbeitungspunkt.' },
+    { icon: Route, title: 'Route planen', text: 'Wähle deinen Fahrradtyp. Für eine Rundtour gibst du die Distanz an, für One-Way ein Ziel.' },
+    { icon: MousePointer2, title: 'Verlauf ändern', text: 'Ziehe die Routenlinie an eine andere Stelle oder tippe sie an, um einen Zwischenpunkt zu setzen.' },
   ],
   en: [
     { icon: MapPin, title: 'Choose a start', text: 'Click the map or use place search to choose your starting point.' },
-    { icon: Route, title: 'Describe your ride', text: 'Choose round trip or one-way, your bike type and preferred distance.' },
-    { icon: MousePointer2, title: 'Adjust with ease', text: 'Drag the coloured route line to a new place or tap it. Velvetia automatically adds an editing point there.' },
+    { icon: Route, title: 'Plan a route', text: 'Choose your bike type. Set a distance for a round trip or a destination for a one-way ride.' },
+    { icon: MousePointer2, title: 'Change the route', text: 'Drag the route line to another place or tap it to add a waypoint.' },
   ],
 }
 
 export function Onboarding({ onClose, locale }: { onClose: () => void; locale: Locale }) {
   const [step, setStep] = useState(0); const steps = guides[locale]; const current = steps[step]; const Icon = current.icon
   return <AppDialog open onOpenChange={(open) => { if (!open) onClose() }} label={current.title} className="onboarding">
-      <button className="icon-button onboarding-close" onClick={onClose} aria-label={locale === 'de' ? 'Anleitung schließen' : 'Close guide'}><X size={20} /></button>
+      <button className="icon-button onboarding-close" onClick={onClose} aria-label={locale === 'de' ? 'Anleitung schliessen' : 'Close guide'}><X size={20} /></button>
       <div className="onboarding-icon"><Icon size={28} /></div>
       <p className="eyebrow">{locale === 'de' ? `Schritt ${step + 1} von ${steps.length}` : `Step ${step + 1} of ${steps.length}`}</p>
       <h2 id="guide-title">{current.title}</h2><p>{current.text}</p>
@@ -30,7 +30,7 @@ export function Onboarding({ onClose, locale }: { onClose: () => void; locale: L
         <button className="text-button" disabled={step === 0} onClick={() => setStep((value) => value - 1)}><ChevronLeft size={18} /> {locale === 'de' ? 'Zurück' : 'Back'}</button>
         {step < steps.length - 1
           ? <button className="primary-button" onClick={() => setStep((value) => value + 1)}>{locale === 'de' ? 'Weiter' : 'Next'} <ChevronRight size={18} /></button>
-          : <button className="primary-button" onClick={onClose}>{locale === 'de' ? 'Losfahren' : 'Start riding'}</button>}
+          : <button className="primary-button" onClick={onClose}>{locale === 'de' ? 'Zur Karte' : 'Go to map'}</button>}
       </div>
   </AppDialog>
 }

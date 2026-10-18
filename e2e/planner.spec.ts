@@ -68,7 +68,7 @@ test('library filters, keyboard dismissal and theme survive reload', async ({ pa
   else await page.locator('.topbar nav').getByRole('button', { name: /Meine Routen/ }).click()
   const dialog = page.getByRole('dialog', { name: 'Meine Routen' })
   await expect(dialog).toBeVisible()
-  await expect(dialog.getByRole('heading', { name: 'Deine nächste Tour beginnt hier.' })).toBeVisible()
+  await expect(dialog.getByRole('heading', { name: 'Noch keine gespeicherten Routen' })).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(dialog).not.toBeVisible()
 })

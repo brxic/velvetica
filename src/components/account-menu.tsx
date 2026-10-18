@@ -88,7 +88,7 @@ export function AccountMenu({ locale }: { locale: Locale }) {
     }
     setUser(data.user)
     setPassword('')
-    setNotice({ tone: 'success', text: de ? 'Du bist angemeldet. Deine Routen werden synchronisiert.' : 'You are signed in. Your routes are being synced.' })
+    setNotice({ tone: 'success', text: de ? 'Du bist angemeldet.' : 'You are signed in.' })
   }
 
   async function signUp(event: FormEvent<HTMLFormElement>) {
@@ -169,26 +169,26 @@ export function AccountMenu({ locale }: { locale: Locale }) {
         <p className="eyebrow">Velvetia Cloud</p>
         <h2 id="account-title">{title}</h2>
         {!supabase ? <>
-          <p>{de ? 'Die App ist vorbereitet. Sobald die Supabase-Zugangsdaten gesetzt sind, wird die sichere Anmeldung hier automatisch aktiviert.' : 'The app is ready. Secure sign-in will activate here once the Supabase credentials are configured.'}</p>
-          <div className="account-feature"><Check size={16} />{de ? 'Lokales Planen und Speichern funktioniert weiterhin.' : 'Local planning and saving continues to work.'}</div>
+          <p>{de ? 'Die Anmeldung ist in dieser Installation nicht eingerichtet.' : 'Sign-in has not been set up for this installation.'}</p>
+          <div className="account-feature"><Check size={16} />{de ? 'Planen und lokales Speichern sind ohne Konto möglich.' : 'You can plan routes and save them on this device without an account.'}</div>
         </> : user && !isUpdatingPassword ? <>
           <div className="account-user"><span>{de ? 'Angemeldet als' : 'Signed in as'}</span><strong>{user.email}</strong></div>
           <AccountSettings locale={locale} />
           <button type="button" className="secondary-button account-submit" onClick={() => selectView('update-password')} disabled={pending}><LockKeyhole size={17} />{de ? 'Passwort festlegen oder ändern' : 'Set or change password'}</button>
           <button type="button" className="account-link account-signout" onClick={() => void signOut()} disabled={pending}><LogOut size={15} />{de ? 'Abmelden' : 'Sign out'}</button>
         </> : view === 'forgot-password' ? <>
-          <p>{de ? 'Wir senden dir einen sicheren Link, mit dem du ein neues Passwort festlegen kannst.' : 'We will send you a secure link to set a new password.'}</p>
+          <p>{de ? 'Wir schicken dir per E-Mail einen Link zum Zurücksetzen deines Passworts.' : 'We will email you a link to reset your password.'}</p>
           <form className="account-form" onSubmit={(event) => void requestPasswordReset(event)}>
             <EmailField email={email} setEmail={setEmail} de={de} />
             <button className="primary-button account-submit" disabled={pending}>{pending ? (de ? 'Wird gesendet …' : 'Sending …') : (de ? 'Reset-Link senden' : 'Send reset link')}</button>
           </form>
           <button type="button" className="account-link" onClick={() => selectView('sign-in')}>{de ? 'Zurück zur Anmeldung' : 'Back to sign in'}</button>
         </> : view === 'update-password' ? <>
-          <p>{de ? 'Verwende mindestens 8 Zeichen. Ein längerer, einzigartiger Satz ist am sichersten.' : 'Use at least 8 characters. A longer, unique phrase is safest.'}</p>
+          <p>{de ? 'Mindestens 8 Zeichen. Verwende ein Passwort, das du für kein anderes Konto nutzt.' : 'Use at least 8 characters and a password you do not use for any other account.'}</p>
           <PasswordForm password={password} setPassword={setPassword} passwordConfirmation={passwordConfirmation} setPasswordConfirmation={setPasswordConfirmation} pending={pending} de={de} onSubmit={updatePassword} submitLabel={de ? 'Passwort speichern' : 'Save password'} />
           {user && <button type="button" className="account-link" onClick={() => selectView('sign-in')}>{de ? 'Zurück zum Konto' : 'Back to account'}</button>}
         </> : view === 'sign-up' ? <>
-          <p>{de ? 'Erstelle dein Konto mit E-Mail und Passwort. Danach bestätigst du einmalig deine E-Mail.' : 'Create your account with email and password, then confirm your email once.'}</p>
+          <p>{de ? 'Nach der Registrierung erhältst du eine E-Mail zur Bestätigung.' : 'After registering, check your email for a confirmation link.'}</p>
           <form className="account-form" onSubmit={(event) => void signUp(event)}>
             <EmailField email={email} setEmail={setEmail} de={de} />
             <PasswordFields password={password} setPassword={setPassword} passwordConfirmation={passwordConfirmation} setPasswordConfirmation={setPasswordConfirmation} de={de} />

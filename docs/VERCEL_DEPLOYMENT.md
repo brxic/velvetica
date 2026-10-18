@@ -28,7 +28,7 @@ Folgende Seiten beziehungsweise Abläufe prüfen:
 - Eine strassengenaue OSM-Fahrradroute kann geplant, verändert, gespeichert und als GPX exportiert werden.
 - Das Favicon erscheint im Browser-Tab.
 
-## Später echtes Routing aktivieren
+## Eigene Valhalla-Instanz verwenden
 
 Sobald eine öffentlich und geschützt erreichbare Valhalla-Instanz existiert, in **Project Settings → Environment Variables** für Preview und Production setzen:
 
@@ -44,7 +44,7 @@ Für das Testdeployment nicht die lokalen Adressen `localhost:8002`, `localhost:
 
 ## Datenbank und Redis
 
-Ohne `DATABASE_URL` bleiben gespeicherte Routen sicher im `localStorage` des Browsers. Mit einer TLS-gesicherten, PostGIS-fähigen `DATABASE_URL` aktiviert Velvetia automatisch die serverseitige Synchronisierung und Versionshistorie. Das Schema wird beim ersten Zugriff idempotent eingerichtet. Der Drawer zeigt sichtbar entweder `PostGIS verbunden` oder `Lokaler Speicher`.
+Ohne `DATABASE_URL` speichert Velvetia Routen nur im `localStorage` dieses Browsers. Wird dieser Speicher gelöscht oder blockiert, sind diese Kopien nicht mehr verfügbar. Wichtige Routen zusätzlich als GPX exportieren. Mit einer TLS-gesicherten, PostGIS-fähigen `DATABASE_URL` stehen serverseitige Synchronisierung und Versionshistorie zur Verfügung. Das Schema wird beim ersten Zugriff eingerichtet; erneute Aufrufe legen vorhandene Tabellen nicht neu an. Die Routenbibliothek zeigt den verwendeten Speicherstatus.
 
 Ohne Supabase verwendet die Besitztrennung eine anonyme HttpOnly-Browser-ID. Mit Supabase Auth werden bestehende anonyme Routen beim ersten Login automatisch übernommen und danach geräteübergreifend dem verifizierten Benutzerkonto zugeordnet. Auch der persönliche Home-Punkt wird über die verifizierte Supabase-Benutzer-ID gespeichert. Für den Transaction Pooler muss die `DATABASE_URL` mit `?uselibpqcompat=true&sslmode=require` enden. Die vollständige Einrichtung inklusive PostGIS-Migration, RLS, E-Mail-/Passwort-Templates und Vercel-Variablen steht in [SUPABASE_SETUP.md](./SUPABASE_SETUP.md). `REDIS_URL` bleibt für das Testdeployment optional.
 

@@ -52,7 +52,7 @@ Mit gesetzter `DATABASE_URL` synchronisiert Velvetia gespeicherte Routen zusätz
 
 Die Tabellen `app.routes` und `app.route_versions` werden bei neuen Volumes durch `infrastructure/postgres/init.sql` angelegt. Bei bereits existierenden Volumes führt die Anwendung dieselbe additive, idempotente Schemaeinrichtung beim ersten Zugriff auf `/api/saved-routes` aus. Jede Speicherung erzeugt atomar eine neue Version. Löschvorgänge markieren die aktuelle Route zunächst mit `deleted_at`; die Versionen bleiben erhalten.
 
-Bis zur Einführung von Benutzerkonten trennt eine zufällige, HttpOnly- und SameSite-geschützte Browser-ID die Besitzer. Sie ist kein Ersatz für ein Benutzerkonto und ermöglicht noch keine geräteübergreifende Anmeldung.
+Ohne Anmeldung trennt eine zufällige, HttpOnly- und SameSite-geschützte Browser-ID die Besitzer. Für kontogebundene Routen und geräteübergreifende Anmeldung muss Supabase eingerichtet sein; siehe [SUPABASE_SETUP.md](./SUPABASE_SETUP.md).
 
 ## Betriebsbereitschaft prüfen
 

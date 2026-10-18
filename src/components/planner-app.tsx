@@ -64,6 +64,8 @@ function ensureEditableAnchors(route: PlannedRoute) {
 
 export function PlannerApp() {
   const [locale, setLocale] = useState<Locale>('de'); const copy = t(locale)
+  const localeRef = useRef(locale)
+  useEffect(() => { localeRef.current = locale }, [locale])
   const { confirm: askConfirmation, confirmation } = useConfirmation(locale)
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
   const [mode, setMode] = useState<RouteMode>('round-trip'); const [profile, setProfile] = useState<BikeProfile>('road')
@@ -142,7 +144,7 @@ export function PlannerApp() {
           const saved = await authenticatedFetch(`/api/saved-routes/${item.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) })
           migrationStates.set(item.id, saved.ok ? 'synced' : saved.status === 409 ? 'conflict' : 'local')
           if (!saved.ok) failedSync = true
-          if (saved.status === 409 && loadId === cloudLoadRef.current) { setSyncConflict(true); setNotice('Eine Route wurde auf einem anderen Gerät geändert. Öffne sie und speichere deine Änderungen als Kopie. / A route changed on another device. Open it and save your changes as a copy.') }
+          if (saved.status === 409 && loadId === cloudLoadRef.current) { setSyncConflict(true); setNotice(localeRef.current === 'de' ? 'Diese Route wurde auf einem anderen Gerät geändert. Speichere deine Änderungen als Kopie.' : 'This route changed on another device. Save your changes as a copy.') }
           return saved.ok ? (await saved.json() as { route: PlannedRoute }).route : item
         }))
         if (loadId !== cloudLoadRef.current) return
@@ -421,7 +423,7 @@ export function PlannerApp() {
       setRoute(imported); dispatchWaypoints({ type: 'reset', waypoints: imported.waypoints }); setMode(imported.mode)
       setDistance(Math.max(5, Math.min(250, Math.round(imported.metrics.distanceKm / 5) * 5)))
       setShowRouteDetails(true); setActiveProfileIndex(null); setPlannerOpen(false)
-      setNotice(de ? `„${imported.name}“ wurde unverändert importiert.` : `“${imported.name}” was imported without changing its geometry.`)
+      setNotice(de ? `„${imported.name}“ importiert.` : `Imported “${imported.name}”.`)
     } catch (error) {
       const code = error instanceof GpxImportError ? error.code : error instanceof Error ? error.message : 'invalid-xml'
       const messages: Record<string, [string, string]> = {
@@ -477,7 +479,7 @@ export function PlannerApp() {
     {route ? <div className="route-edit-hint" role="note"><MousePointer2 size={17} /><span>{locale === 'de' ? (compactViewport ? 'Linie antippen oder ziehen' : 'Route bearbeiten: Linie ziehen oder antippen') : (compactViewport ? 'Tap or drag the line' : 'Edit route: drag or tap the line')}</span></div> : null}
 
     <aside id="planner-controls" tabIndex={-1} inert={!plannerOpen} className={`planner-panel ${plannerOpen ? 'is-open' : ''}`} aria-label={locale === 'de' ? 'Routeneinstellungen' : 'Route settings'}>
-      <div className="panel-intro"><p className="eyebrow">{locale === 'de' ? 'Schweizer Routenplaner' : 'Swiss route planner'}</p><h1>{locale === 'de' ? 'Wohin möchtest du fahren?' : 'Where do you want to ride?'}</h1><p>{locale === 'de' ? 'Suche einen Ort oder setze Punkte direkt auf der Karte. Den Rest übernimmt Velvetia.' : 'Search for a place or choose points on the map. Velvetia takes care of the rest.'}</p></div>
+      <div className="panel-intro"><p className="eyebrow">{locale === 'de' ? 'Schweizer Routenplaner' : 'Swiss route planner'}</p><h1>{locale === 'de' ? 'Wohin möchtest du fahren?' : 'Where do you want to ride?'}</h1><p>{locale === 'de' ? 'Suche deinen Startort oder wähle ihn auf der Karte.' : 'Search for your starting point or choose it on the map.'}</p></div>
 
       <div className="segmented-control" aria-label={locale === 'de' ? 'Routentyp' : 'Route type'}>
         <button className={mode === 'round-trip' ? 'is-active' : ''} aria-pressed={mode === 'round-trip'} onClick={() => changeMode('round-trip')}>{copy.roundTrip}</button>
@@ -522,7 +524,7 @@ export function PlannerApp() {
         <PreferenceSelect label={locale === 'de' ? 'Steigungen' : 'Climbing'} value={preferences.climbing} onChange={(climbing) => setPreferences({ ...preferences, climbing })} options={[
           ['avoid', locale === 'de' ? 'Eher flach' : 'Prefer flat'], ['balanced', locale === 'de' ? 'Ausgewogen' : 'Balanced'], ['challenge', locale === 'de' ? 'Herausforderung' : 'Challenge'],
         ]} />
-        <PreferenceSelect label={locale === 'de' ? 'Straßenwahl' : 'Road choice'} value={preferences.safety} onChange={(safety) => setPreferences({ ...preferences, safety })} options={[
+        <PreferenceSelect label={locale === 'de' ? 'Strassenwahl' : 'Road choice'} value={preferences.safety} onChange={(safety) => setPreferences({ ...preferences, safety })} options={[
           ['quiet', locale === 'de' ? 'Ruhige Strassen' : 'Quiet roads'], ['balanced', locale === 'de' ? 'Ausgewogen' : 'Balanced'], ['direct', locale === 'de' ? 'Möglichst direkt' : 'Most direct'],
         ]} />
       </div>}
@@ -544,7 +546,7 @@ export function PlannerApp() {
       <div className="drawer-head"><div><p className="eyebrow">Velvetia</p><h2>{copy.saved}</h2><span className={`persistence-status is-${persistenceState}`}>{persistenceState === 'server' ? accountAuthenticated ? (locale === 'de' ? 'Mit deinem Konto synchronisiert' : 'Synced with your account') : (locale === 'de' ? 'Anonymer Cloud-Speicher' : 'Anonymous cloud storage') : persistenceState === 'checking' ? (locale === 'de' ? 'Speicher wird geprüft …' : 'Checking storage …') : (locale === 'de' ? 'Lokaler Speicher' : 'Local storage')}</span></div><Button variant="icon" onClick={() => setShowSaved(false)} aria-label={locale === 'de' ? 'Schliessen' : 'Close'}><X /></Button></div>
       {savedRoutes.length > 0 && <div className="saved-tools"><label className="saved-search"><Search size={16} /><span className="sr-only">{locale === 'de' ? 'Routen suchen' : 'Search routes'}</span><input value={savedSearch} onChange={(event) => setSavedSearch(event.target.value)} placeholder={locale === 'de' ? 'Routen suchen' : 'Search routes'} /></label><select value={savedSort} onChange={(event) => setSavedSort(event.target.value as typeof savedSort)} aria-label={locale === 'de' ? 'Routen sortieren' : 'Sort routes'}><option value="updated">{locale === 'de' ? 'Zuletzt geändert' : 'Last edited'}</option><option value="name">{locale === 'de' ? 'Name' : 'Name'}</option><option value="distance">{locale === 'de' ? 'Distanz' : 'Distance'}</option></select></div>}
       {savedRoutes.length > 0 && <div className="saved-filters"><select value={savedProfile} onChange={(e) => setSavedProfile(e.target.value)} aria-label={locale === 'de' ? 'Fahrradtyp filtern' : 'Filter bike type'}><option value="all">{locale === 'de' ? 'Alle Fahrräder' : 'All bikes'}</option>{profiles.map(({ id }) => <option key={id} value={id}>{copy[id]}</option>)}</select><button className={favoritesOnly ? 'is-active' : ''} aria-pressed={favoritesOnly} onClick={() => setFavoritesOnly(!favoritesOnly)}><Star size={15} />{locale === 'de' ? 'Favoriten' : 'Favorites'}</button><label>{locale === 'de' ? 'Bis' : 'Up to'} <select aria-label={locale === 'de' ? 'Maximale Distanz' : 'Maximum distance'} value={maxSavedDistance} onChange={(e) => setMaxSavedDistance(Number(e.target.value))}>{[25, 50, 100, 250, 500].map((km) => <option key={km} value={km}>{km} km</option>)}</select></label></div>}
-      {savedRoutes.length === 0 ? <div className="empty-state"><Bookmark size={28} /><h3>{locale === 'de' ? 'Deine nächste Tour beginnt hier.' : 'Your next ride starts here.'}</h3><p>{locale === 'de' ? 'Plane eine Route und speichere sie. Du findest sie hier und direkt auf der Karte wieder.' : 'Plan and save a route. Find it here and right on the map.'}</p><button className="primary-button" onClick={() => { setShowSaved(false); setPlannerOpen(true) }}>{copy.calculate}</button></div> : visibleSavedRoutes.length === 0 ? <div className="empty-state"><Search size={28} /><h3>{locale === 'de' ? 'Nichts gefunden' : 'Nothing found'}</h3><button className="account-link" onClick={() => { setSavedSearch(''); setSavedProfile('all'); setFavoritesOnly(false); setMaxSavedDistance(500) }}>{locale === 'de' ? 'Filter zurücksetzen' : 'Reset filters'}</button></div> : <div className="saved-list">{visibleSavedRoutes.map((saved) => <article key={saved.id}>
+      {savedRoutes.length === 0 ? <div className="empty-state"><Bookmark size={28} /><h3>{locale === 'de' ? 'Noch keine gespeicherten Routen' : 'No saved routes yet'}</h3><p>{locale === 'de' ? 'Gespeicherte Routen findest du hier und auf der Karte.' : 'Routes you save appear here and on the map.'}</p><button className="primary-button" onClick={() => { setShowSaved(false); setPlannerOpen(true) }}>{copy.calculate}</button></div> : visibleSavedRoutes.length === 0 ? <div className="empty-state"><Search size={28} /><h3>{locale === 'de' ? 'Keine passenden Routen' : 'No matching routes'}</h3><button className="account-link" onClick={() => { setSavedSearch(''); setSavedProfile('all'); setFavoritesOnly(false); setMaxSavedDistance(500) }}>{locale === 'de' ? 'Filter zurücksetzen' : 'Reset filters'}</button></div> : <div className="saved-list">{visibleSavedRoutes.map((saved) => <article key={saved.id}>
           <button className="saved-main" onClick={() => openSavedRoute(saved)}><span className="saved-route-icon"><RouteThumbnail route={saved} /></span><span><strong>{saved.name}</strong><small>{copy[saved.profile]} · {saved.metrics.distanceKm} km · {formatDuration(saved.metrics.durationMinutes)}</small></span><ChevronDown className="saved-chevron" /></button>
         <div className="saved-actions">
           <button className={saved.favorite ? 'is-favorite' : ''} onClick={() => void toggleFavorite(saved)} aria-label={locale === 'de' ? 'Favorit umschalten' : 'Toggle favorite'}><Star size={15} fill={saved.favorite ? 'currentColor' : 'none'} /></button>

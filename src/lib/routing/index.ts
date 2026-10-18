@@ -18,6 +18,6 @@ export async function planRoute(request: PlanningRequest) {
   catch (error) {
     if (provider.id === 'preview' || process.env.ROUTING_FALLBACK !== 'preview') throw error
     const fallback = planPreviewRoute(request)
-    return { ...fallback, warnings: [request.locale === 'de' ? 'Routingdienst war nicht erreichbar; lokale Vorschau wird angezeigt.' : 'The routing service was unavailable; a local preview is shown.'] }
+    return { ...fallback, warnings: [request.locale === 'de' ? 'Der Routingdienst ist nicht erreichbar. Angezeigt wird eine Testvorschau, die sich nicht zum Nachfahren eignet.' : 'The routing service is unavailable. This is a test preview, not a route to ride.'] }
   }
 }

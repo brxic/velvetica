@@ -71,13 +71,13 @@ Erwartet werden:
 3. Unter **Publishable key** den Wert kopieren, der mit `sb_publishable_` beginnt.
 4. Falls nur Legacy Keys angezeigt werden, im Tab für neue API Keys einen Publishable Key erstellen. Für Velvetia nicht den Legacy-`service_role`-Key verwenden.
 
-Die Project URL und der Publishable Key dürfen im Browser verwendet werden. Der Datenschutz entsteht durch Authentifizierung, API-Autorisierung und RLS – nicht durch das Verstecken des Publishable Keys.
+Die Project URL und der Publishable Key dürfen im Browser verwendet werden. Authentifizierung, API-Autorisierung und RLS beschränken den Datenzugriff. Der Publishable Key selbst ist kein Geheimnis.
 
 ## 3. Gepoolte Datenbank-URL holen
 
 1. Oben im Projekt **Connect** wählen.
 2. Zum Bereich **Connection string** wechseln.
-3. **Transaction pooler** auswählen – nicht Direct Connection und nicht Session Pooler.
+3. **Transaction pooler** auswählen. Direct Connection und Session Pooler sind für diese Anleitung nicht vorgesehen.
 4. Als Format **URI** wählen und den String kopieren. Er muss den Port `6543` enthalten und sieht ungefähr so aus:
 
    ```text

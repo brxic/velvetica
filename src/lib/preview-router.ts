@@ -60,7 +60,7 @@ export function planPreviewRoute(request: PlanningRequest): PlannedRoute {
       elevationGainM, elevationLossM: request.mode === 'round-trip' ? elevationGainM : Math.round(elevationGainM * .8),
       asphaltPercent: Math.max(25, Math.min(100, asphalt[request.profile] + surfaceAdjustment)), cyclewayPercent: request.profile === 'city' ? 58 : 34, confidence: 'preview', elevationProfile,
     },
-    warnings: [request.locale === 'de' ? 'Preview-Geometrie folgt noch nicht dem realen Wegenetz.' : 'Preview geometry does not yet follow the real road network.'],
+    warnings: [request.locale === 'de' ? 'Diese Testvorschau folgt keinem Wegenetz. Wege und Höhenwerte sind erfunden.' : 'This test preview does not follow a road network. Paths and elevation values are simulated.'],
     provenance: { routingEngine: 'Velvetia Preview', primaryDataSource: request.locale === 'de' ? 'Synthetische Vorschaugeometrie' : 'Synthetic preview geometry', graphVersion: 'preview-v1', dataUpdatedAt: createdAt, analyzedAt: createdAt, regionId: 'ch', confidence: 'low' },
   }
 }

@@ -18,7 +18,7 @@ Gleiche Eingaben und derselbe Valhalla-Graph ergeben dieselben Kandidaten und di
 
 Die ausgewählten automatischen Anker werden als unsichtbare `generated`-Wegpunkte in der Route gespeichert. Dadurch bleibt die ursprüngliche Runde beim späteren Bearbeiten erhalten. Bereits lokal gespeicherte Routen aus älteren Versionen erhalten beim Öffnen kompatible Anker aus ihrem vorhandenen Verlauf.
 
-Beim Ziehen oder Antippen der roten Route entsteht ein sichtbarer `shaping`-Punkt an der passenden Position zwischen den bestehenden Ankern. Valhalla berechnet die angrenzenden Verbindungen neu; Name, Beschreibung und Identität der Route bleiben erhalten. Shaping-Punkte können verschoben, gelöscht sowie über Undo und Redo wiederhergestellt werden.
+Beim Ziehen oder Antippen der Routenlinie entsteht ein sichtbarer `shaping`-Punkt zwischen den bestehenden Ankern. Valhalla berechnet die angrenzenden Verbindungen neu; Name, Beschreibung und Identität der Route bleiben erhalten. Shaping-Punkte können verschoben, gelöscht sowie über Undo und Redo wiederhergestellt werden.
 
 ## Aktuelle Grenzwerte
 
@@ -26,4 +26,4 @@ Beim Ziehen oder Antippen der roten Route entsteht ein sichtbarer `shaping`-Punk
 - wiederholte Kanten: höchstens 16 %
 - radiale Überschreitung: höchstens 12 % über dem distanzabhängigen Korridor
 
-Wenn kein Kandidat alle Grenzen erfüllt, wird der Kandidat mit dem besten Gesamtscore geliefert und transparent mit einem Qualitätshinweis versehen.
+Wenn kein Kandidat alle Grenzen erfüllt, erhält der Vorschlag mit dem besten Gesamtscore einen Qualitätshinweis. Der FOSSGIS-Adapter lehnt extreme Ausreisser ab, statt sie auszugeben.

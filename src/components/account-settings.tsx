@@ -82,13 +82,13 @@ export function AccountSettings({ locale }: { locale: Locale }) {
       }
       announceAuthState(null)
       router.replace('/'); router.refresh()
-    } catch { setNotice(de ? 'Keine Verbindung. Dein Konto wurde nicht bestätigt gelöscht.' : 'Connection failed. Account deletion has not been confirmed.') }
+    } catch { setNotice(de ? 'Die Kontolöschung wurde nicht bestätigt. Prüfe deine Verbindung und melde dich erneut an, um den Kontostatus zu prüfen.' : 'Account deletion has not been confirmed. Check your connection and sign in again to check the account status.') }
     finally { setPending(false) }
   }
 
   return <div className="account-settings">
     <form onSubmit={(event) => void save(event)} className="settings-form">
-      <div className="settings-section-title"><h3>{de ? 'Deine Planungsstandards' : 'Your riding defaults'}</h3><p>{de ? 'Einmal einstellen. Bei jeder neuen Tour startklar.' : 'Set once. Ready for every new ride.'}</p></div>
+      <div className="settings-section-title"><h3>{de ? 'Voreinstellungen' : 'Planning defaults'}</h3><p>{de ? 'Neue Routen übernehmen diese Einstellungen.' : 'New routes use these settings.'}</p></div>
       <fieldset disabled={pending || !loaded}>
         <label>{de ? 'Fahrradtyp' : 'Bike type'}<select value={values.profile} onChange={(e) => setValues({ ...values, profile: e.target.value as AccountPreferences['profile'] })}><option value="road">{de ? 'Rennrad' : 'Road'}</option><option value="gravel">Gravel</option><option value="touring">Touring</option><option value="city">City</option></select></label>
         <div className="settings-pair"><label>{de ? 'Rundtour · km' : 'Round trip · km'}<Input type="number" min={5} max={250} required value={values.distanceKm} onChange={(e) => setValues({ ...values, distanceKm: Number(e.target.value) })} /></label><label>{de ? 'Tempo · km/h' : 'Pace · km/h'}<Input type="number" min={5} max={50} step="0.5" required value={values.speedKmh} onChange={(e) => setValues({ ...values, speedKmh: Number(e.target.value) })} /></label></div>

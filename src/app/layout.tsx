@@ -12,8 +12,8 @@ const foundry = localFont({
 })
 
 export const metadata: Metadata = {
-  title: 'Velvetia — Plan less. Ride more.',
-  description: 'Intelligente Fahrradrouten für die Schweiz.',
+  title: 'Velvetia: Plan less. Ride more.',
+  description: 'Plane Fahrradrouten in der Schweiz und passe sie auf der Karte an.',
   applicationName: 'Velvetia',
   icons: { apple: '/apple-touch-icon.png' },
   appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'Velvetia' },
