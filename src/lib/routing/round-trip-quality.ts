@@ -57,23 +57,42 @@ export function createRoundTripSeeds(origin: Coordinate, targetDistanceKm: numbe
   })
 }
 
-function segmentKey(a: Coordinate, b: Coordinate) {
-  const first = `${a[0].toFixed(5)},${a[1].toFixed(5)}`
-  const second = `${b[0].toFixed(5)},${b[1].toFixed(5)}`
-  return first < second ? `${first}|${second}` : `${second}|${first}`
-}
-
 function repeatedDistanceShare(coordinates: Coordinate[]) {
-  const seen = new Set<string>()
-  let total = 0
-  let repeated = 0
+  // Spatial and direction-aware matching also finds a retraced road when the
+  // router uses different vertex spacing in the opposite direction. Nearby
+  // parallel roads and isolated crossings must not count as duplicate riding.
+  type Visit = { x: number; y: number; dx: number; dy: number; station: number }
+  const cells = new Map<string, Visit[]>()
+  const origin = coordinates[0]
+  const scaleX = 111_195 * Math.cos(origin[1] * Math.PI / 180)
+  const geometryKm = coordinates.slice(1).reduce((sum, point, index) => sum + distanceKm(coordinates[index], point), 0)
+  const stepKm = Math.max(.025, geometryKm / 25_000)
+  let total = 0, repeated = 0
   for (let index = 1; index < coordinates.length; index++) {
-    const length = distanceKm(coordinates[index - 1], coordinates[index])
+    const a = coordinates[index - 1], b = coordinates[index]
+    const length = distanceKm(a, b)
     if (length <= 0) continue
+    const dx = (b[0] - a[0]) * scaleX, dy = (b[1] - a[1]) * 111_195
+    const magnitude = Math.hypot(dx, dy) || 1
+    const steps = Math.max(1, Math.ceil(length / stepKm))
+    for (let step = 0; step < steps; step++) {
+      const fraction = (step + .5) / steps
+      const x = (a[0] - origin[0]) * scaleX + dx * fraction
+      const y = (a[1] - origin[1]) * 111_195 + dy * fraction
+      const station = total + length * fraction
+      const cx = Math.floor(x / 25), cy = Math.floor(y / 25)
+      let duplicate = false
+      for (let ox = -1; ox <= 1 && !duplicate; ox++) for (let oy = -1; oy <= 1 && !duplicate; oy++) {
+        duplicate = (cells.get(`${cx + ox},${cy + oy}`) ?? []).some((visit) => station - visit.station > .15 && Math.hypot(x - visit.x, y - visit.y) < 15 && Math.abs(dx / magnitude * visit.dx + dy / magnitude * visit.dy) > .94)
+      }
+      if (duplicate) repeated += length / steps
+      else {
+        const key = `${cx},${cy}`
+        const visits = cells.get(key) ?? []
+        visits.push({ x, y, dx: dx / magnitude, dy: dy / magnitude, station }); cells.set(key, visits)
+      }
+    }
     total += length
-    const key = segmentKey(coordinates[index - 1], coordinates[index])
-    if (seen.has(key)) repeated += length
-    else seen.add(key)
   }
   return total ? repeated / total : 1
 }
@@ -84,7 +103,7 @@ export function evaluateRoundTrip(
   actualDistanceKm: number,
   targetDistanceKm: number,
 ): RouteQuality {
-  if (coordinates.length < 3 || targetDistanceKm <= 0 || !Number.isFinite(actualDistanceKm) || actualDistanceKm <= 0 || !coordinates.every((point) => point.every(Number.isFinite))) {
+  if (coordinates.length < 3 || coordinates.length > 20_000 || !Number.isFinite(targetDistanceKm) || targetDistanceKm <= 0 || !Number.isFinite(actualDistanceKm) || actualDistanceKm <= 0 || !origin.every(Number.isFinite) || !coordinates.every((point) => point.every(Number.isFinite) && Math.abs(point[0]) <= 180 && Math.abs(point[1]) <= 90)) {
     return { score: Number.POSITIVE_INFINITY, distanceDeviation: 1, repeatedShare: 1, radialExcess: 1, acceptable: false }
   }
 
@@ -94,8 +113,16 @@ export function evaluateRoundTrip(
   const allowedRadius = Math.max(3, targetDistanceKm * .42)
   const radialExcess = Math.max(0, maximumRadius / allowedRadius - 1)
   const score = distanceDeviation * 55 + repeatedShare * 120 + radialExcess * 70
-  const closed = distanceKm(coordinates[0], coordinates.at(-1)!) < .5
+  const closed = distanceKm(coordinates[0], coordinates.at(-1)!) < .5 && distanceKm(coordinates[0], origin) < .5
   const acceptable = closed && distanceDeviation <= .18 && repeatedShare <= .16 && radialExcess <= .12
 
   return { score: Math.round(score * 100) / 100, distanceDeviation, repeatedShare, radialExcess, acceptable }
+}
+
+export function compareRouteQuality(a: RouteQuality, b: RouteQuality) {
+  return Number(b.acceptable) - Number(a.acceptable) || a.score - b.score
+}
+
+export function usableRoundTrip(quality: RouteQuality) {
+  return Number.isFinite(quality.score) && quality.repeatedShare <= .45 && quality.radialExcess <= .5 && quality.distanceDeviation <= .55
 }

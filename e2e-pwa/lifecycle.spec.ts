@@ -5,6 +5,27 @@ async function ready(page: Page) {
   await page.evaluate(async () => { await navigator.serviceWorker.ready })
   await expect.poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true)
 }
+
+test('an active ride defers a real PWA update even after the route is saved', async ({ page, request }) => {
+  await page.addInitScript(() => Object.defineProperty(navigator, 'geolocation', { configurable: true, value: { watchPosition: () => 1, clearWatch: () => {} } }))
+  await ready(page)
+  await page.getByLabel('GPX-Datei auswählen').setInputFiles('test-fixtures/bern-import.gpx')
+  await page.getByRole('button', { name: 'Hinweis schliessen' }).click()
+  await page.getByRole('button', { name: 'Route speichern', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Änderungen speichern' })).toBeVisible()
+  await page.getByRole('button', { name: 'Fahrmodus', exact: true }).click()
+  await page.getByRole('button', { name: 'Standort freigeben und starten' }).click()
+  await request.post('/__qa/worker-revision?value=ride-update')
+  await page.evaluate(async () => { await (await navigator.serviceWorker.ready).update() })
+  const update = page.getByRole('button', { name: 'Jetzt aktualisieren' })
+  await expect(update).toBeVisible()
+  await update.click()
+  await expect(page.getByRole('complementary', { name: 'App-Status' })).toContainText('Beende den Fahrmodus')
+  await expect(page.getByRole('region', { name: 'Fahrtübersicht' })).toBeVisible()
+  await page.getByRole('button', { name: 'Fahrmodus beenden' }).click()
+  await Promise.all([page.waitForEvent('load'), update.click()])
+  await expect(page.getByRole('button', { name: 'Jetzt aktualisieren' })).not.toBeVisible()
+})
 test.beforeEach(async ({ page, request }) => {
   await request.post('/__qa/worker-revision?value=baseline')
   await page.addInitScript(() => localStorage.setItem('velvetia.guide-seen.v1', 'true'))

@@ -1,18 +1,21 @@
 'use client'
 
 import { Menu } from '@base-ui/react/menu'
-import { Copy, Download, Link2, MoreHorizontal, RotateCcw, Save } from 'lucide-react'
+import { Copy, Download, Link2, MoreHorizontal, Navigation, RotateCcw, Save } from 'lucide-react'
 import { useState } from 'react'
 import type { Locale, PlannedRoute } from '@/lib/domain'
 import { downloadGpx } from '@/lib/gpx'
+import { rideableSource } from '@/lib/ride-progress'
 import { Button } from './ui/button'
 import { RouteShare } from './route-share'
 
-export function RouteActions({ route, locale, saving, saved, canShare, onSave, onReset }: { route: PlannedRoute; locale: Locale; saving: boolean; saved: boolean; canShare: boolean; onSave: (copy?: boolean) => Promise<void>; onReset: () => Promise<void> }) {
+export function RouteActions({ route, locale, saving, saved, canShare, onSave, onReset, onRide }: { route: PlannedRoute; locale: Locale; saving: boolean; saved: boolean; canShare: boolean; onSave: (copy?: boolean) => Promise<void>; onReset: () => Promise<void>; onRide?: () => void }) {
   const [shareOpen, setShareOpen] = useState(false)
   const de = locale === 'de'
-  return <div className="route-actions">
+  const canRide = Boolean(onRide && rideableSource(route))
+  return <div className={`route-actions ${canRide ? 'has-ride' : ''}`}>
     <Button variant="primary" busy={saving} onClick={() => void onSave(false)}><Save size={18} />{saving ? (de ? 'Speichert …' : 'Saving …') : saved ? (de ? 'Änderungen speichern' : 'Save changes') : (de ? 'Route speichern' : 'Save route')}</Button>
+    {canRide && <Button className="ride-start-button" onClick={onRide}><Navigation size={18} />{de ? 'Fahrmodus' : 'Ride mode'}</Button>}
     <Button onClick={() => downloadGpx(route)}><Download size={18} />{de ? 'GPX exportieren' : 'Export GPX'}</Button>
     <Menu.Root>
       <Menu.Trigger render={<Button className="route-more-button" aria-label={de ? 'Weitere Routenaktionen' : 'More route actions'} />}><MoreHorizontal size={20} /></Menu.Trigger>

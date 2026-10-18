@@ -23,6 +23,8 @@ export type RouteMetrics = {
   elevationLossM: number
   asphaltPercent: number
   cyclewayPercent: number
+  surfaceAnalyzed?: boolean
+  elevationAnalyzed?: boolean
   confidence: 'preview' | 'verified'
   elevationProfile: number[]
   /** Distance along the geometry for each elevation value; absent on legacy routes. */

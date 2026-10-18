@@ -24,6 +24,8 @@ import { plannedRouteSchema } from '@/lib/route-schema'
 import { RouteThumbnail } from './route-thumbnail'
 import { acknowledgeSavedDraft, routeSignature, type RouteSyncState } from '@/lib/route-draft'
 import { PWA_UPDATE_CHECK } from '@/lib/pwa'
+import { useRideSession } from './use-ride-session'
+import { RidePanel } from './ride-panel'
 
 const LEGACY_STORAGE_KEY = 'velvetia.saved-routes.v1'
 const STORAGE_KEY_PREFIX = 'velvetia.saved-routes.v2'
@@ -59,6 +61,8 @@ function ensureEditableAnchors(route: PlannedRoute) {
 }
 
 export function PlannerApp() {
+  const ride = useRideSession()
+  const [rideSetup, setRideSetup] = useState(false)
   const [locale, setLocale] = useState<Locale>('de'); const copy = t(locale)
   const localeRef = useRef(locale)
   useEffect(() => { localeRef.current = locale }, [locale])
@@ -447,9 +451,10 @@ export function PlannerApp() {
     document.documentElement.lang = locale === 'de' ? 'de-CH' : 'en'
   }, [theme, locale])
 
-  return <main id="planner" className={`app-shell theme-${theme} ${plannerOpen ? 'has-planner' : ''} ${route && routeDetailsExpanded && !compactViewport ? 'has-expanded-route' : ''}`}>
+  return <main id="planner" className={`app-shell theme-${theme} ${ride.route ? 'is-riding' : ''} ${plannerOpen ? 'has-planner' : ''} ${route && routeDetailsExpanded && !compactViewport ? 'has-expanded-route' : ''}`}>
     <a href="#planner-controls" className="skip-link">{locale === 'de' ? 'Zur Routenplanung' : 'Skip to route planning'}</a>
-    <MapCanvas theme={theme} activeRoute={route} savedRoutes={savedRoutes} waypoints={waypoints} onMapClick={handleMapClick} onWaypointMove={handleWaypointMove} onRouteShape={handleRouteShape} activeProfileIndex={activeProfileIndex} onActiveProfileIndexChange={setActiveProfileIndex} locale={locale} />
+    <MapCanvas theme={theme} activeRoute={ride.route ?? route} savedRoutes={savedRoutes} waypoints={ride.route?.waypoints ?? waypoints} onMapClick={handleMapClick} onWaypointMove={handleWaypointMove} onRouteShape={handleRouteShape} activeProfileIndex={activeProfileIndex} onActiveProfileIndexChange={setActiveProfileIndex} locale={locale} riding={Boolean(ride.route)} rideFix={ride.fresh ? ride.fix : null} following={ride.following} onFollowChange={ride.setFollowing} />
+    <RidePanel session={ride} locale={locale} />
 
     <header className="topbar">
       <button className="brand" onClick={reset} aria-label={locale === 'de' ? 'Velvetia Startseite' : 'Velvetia home'}>
@@ -533,10 +538,17 @@ export function PlannerApp() {
       <div className="route-summary-head"><div><p className="eyebrow">{copy.routeReady}</p><input className="route-name-input" value={route.name} maxLength={80} aria-label={locale === 'de' ? 'Routenname' : 'Route name'} onChange={(event) => setRoute({ ...route, name: event.target.value })} /><textarea className="route-description-input" value={route.description ?? ''} maxLength={300} rows={1} placeholder={locale === 'de' ? 'Beschreibung hinzufügen …' : 'Add a description …'} aria-label={locale === 'de' ? 'Routenbeschreibung' : 'Route description'} onChange={(event) => setRoute({ ...route, description: event.target.value })} /></div><div className="route-statuses"><span data-state={currentSyncState} className={`save-status ${hasUnsavedChanges ? 'is-dirty' : ''}`}>{saveStatus}</span><span className={`preview-badge ${route.metrics.confidence === 'verified' ? 'is-verified' : ''}`}>{isGpxImport ? 'GPX Import' : route.metrics.confidence === 'verified' ? (locale === 'de' ? 'OSM-Routing' : 'OSM routing') : copy.preview}</span><button className="route-expand-toggle" onClick={() => { const expanded = !routeDetailsExpanded; setRouteDetailsExpanded(expanded); if (expanded) { setShowRouteDetails(true); setPlannerOpen(false) } }} aria-pressed={routeDetailsExpanded} aria-label={routeDetailsExpanded ? (locale === 'de' ? 'Kompakte Detailansicht' : 'Compact detail view') : (locale === 'de' ? 'Grosse Detailansicht neben der Karte' : 'Large detail view beside the map')}>{routeDetailsExpanded ? <Minimize2 size={15} /> : <Maximize2 size={15} />}<span>{routeDetailsExpanded ? (locale === 'de' ? 'Kompakt' : 'Compact') : (locale === 'de' ? 'Alle Details' : 'All details')}</span></button><button className={`route-detail-toggle ${showRouteDetails ? 'is-open' : ''}`} onClick={() => setShowRouteDetails(!showRouteDetails)} aria-expanded={showRouteDetails} aria-label={showRouteDetails ? (locale === 'de' ? 'Routendetails ausblenden' : 'Hide route details') : (locale === 'de' ? 'Routendetails einblenden' : 'Show route details')}><ChevronDown size={16} /><span>{showRouteDetails ? (locale === 'de' ? 'Details ausblenden' : 'Hide details') : (locale === 'de' ? 'Details anzeigen' : 'Show details')}</span></button></div></div>
       {showRouteDetails && <RouteDetails route={route} locale={locale} speedKmh={speedKmh} activeIndex={activeProfileIndex} onActiveIndexChange={setActiveProfileIndex} condensed={!routeDetailsExpanded || compactViewport} />}
       {!routeDetailsExpanded && route.warnings.length > 0 && <button className="route-warning-summary" onClick={() => { setRouteDetailsExpanded(true); setPlannerOpen(false) }}>{locale === 'de' ? `${route.warnings.length} Hinweise zur Route · in den Details prüfen` : `${route.warnings.length} route notes · review in details`}</button>}
-      <RouteActions key={route.id} route={route} locale={locale} saving={saving} saved={Boolean(persistedRoute)} canShare={Boolean(persistedRoute?.serverVersion && accountAuthenticated)} onSave={saveRoute} onReset={reset} />
+      <RouteActions key={route.id} route={route} locale={locale} saving={saving} saved={Boolean(persistedRoute)} canShare={Boolean(persistedRoute?.serverVersion && accountAuthenticated)} onSave={saveRoute} onReset={reset} onRide={() => setRideSetup(true)} />
       {syncConflict && <button className="account-link" onClick={() => window.location.reload()}>{locale === 'de' ? 'Aktuellen Serverstand neu laden (lokale Änderungen vorher als Kopie speichern)' : 'Reload server version (save local changes as a copy first)'}</button>}
     </section>}
 
+    <AppDialog open={rideSetup} onOpenChange={setRideSetup} label={locale === 'de' ? 'Fahrt vorbereiten' : 'Prepare your ride'} finalFocus={() => ride.route ? document.getElementById('ride-exit') : true}>
+      <div className="dialog-heading"><h2>{locale === 'de' ? 'Fahrt vorbereiten' : 'Prepare your ride'}</h2><Button variant="icon" onClick={() => setRideSetup(false)} aria-label={locale === 'de' ? 'Schliessen' : 'Close'}><X size={18} /></Button></div>
+      <p className="ride-setup-copy">{locale === 'de' ? 'Zeige deinen Standort und den Fortschritt auf dieser Route. Dein Live-Standort bleibt in dieser Sitzung und wird nicht an Velvetia übertragen.' : 'Show your location and progress on this route. Your live location stays in this session and is not sent to Velvetia.'}</p>
+      <p className="ride-setup-copy">{locale === 'de' ? 'Es gibt noch keine Abbiegehinweise oder automatische Neuberechnung. Bei gesperrtem Bildschirm oder im Hintergrund kann GPS aussetzen. Zum Bedienen anhalten.' : 'Turn-by-turn directions and automatic rerouting are not available. GPS may stop when the screen locks or the app is in the background. Stop before using controls.'}</p>
+      {route && route.warnings.length > 0 ? <p className="ride-setup-copy">{locale === 'de' ? `Die Route enthält ${route.warnings.length} Hinweise. Prüfe diese vor der Fahrt in den Routendetails.` : `This route has ${route.warnings.length} notes. Review them in the route details before riding.`}</p> : null}
+      <Button variant="primary" onClick={() => { if (route) { ride.start(route); setRideSetup(false); setActiveProfileIndex(null); setShowSaved(false); setRouteDetailsExpanded(false) } }}>{locale === 'de' ? 'Standort freigeben und starten' : 'Allow location and start'}</Button>
+    </AppDialog>
     <AppDialog open={showSaved} onOpenChange={setShowSaved} label={copy.saved} className="saved-drawer" placement="end">
       <div className="drawer-head"><div><p className="eyebrow">Velvetia</p><h2>{copy.saved}</h2><span className={`persistence-status is-${persistenceState}`}>{persistenceState === 'server' ? accountAuthenticated ? (locale === 'de' ? 'Mit deinem Konto synchronisiert' : 'Synced with your account') : (locale === 'de' ? 'Anonymer Cloud-Speicher' : 'Anonymous cloud storage') : persistenceState === 'checking' ? (locale === 'de' ? 'Speicher wird geprüft …' : 'Checking storage …') : (locale === 'de' ? 'Lokaler Speicher' : 'Local storage')}</span></div><Button variant="icon" onClick={() => setShowSaved(false)} aria-label={locale === 'de' ? 'Schliessen' : 'Close'}><X /></Button></div>
       {savedRoutes.length > 0 && <div className="saved-tools"><label className="saved-search"><Search size={16} /><span className="sr-only">{locale === 'de' ? 'Routen suchen' : 'Search routes'}</span><input value={savedSearch} onChange={(event) => setSavedSearch(event.target.value)} placeholder={locale === 'de' ? 'Routen suchen' : 'Search routes'} /></label><select value={savedSort} onChange={(event) => setSavedSort(event.target.value as typeof savedSort)} aria-label={locale === 'de' ? 'Routen sortieren' : 'Sort routes'}><option value="updated">{locale === 'de' ? 'Zuletzt geändert' : 'Last edited'}</option><option value="name">{locale === 'de' ? 'Name' : 'Name'}</option><option value="distance">{locale === 'de' ? 'Distanz' : 'Distance'}</option></select></div>}

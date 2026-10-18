@@ -17,7 +17,8 @@
     "test:e2e": "playwright test",
     "test:pwa": "node scripts/pwa-qa.mjs",
     "test:database": "node scripts/database-qa.mjs",
-    "test:integration": "node scripts/run-database-qa.mjs"
+    "test:integration": "node scripts/run-database-qa.mjs",
+    "test:routing:live": "node scripts/routing-corpus-qa.mjs"
   },
   "dependencies": {
     "@base-ui/react": "1.9.0",

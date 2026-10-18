@@ -44,4 +44,17 @@ describe('FOSSGIS bicycle routing', () => {
     expect((await planned).geometry.coordinates).toEqual(compact)
     expect(fetchMock).toHaveBeenCalledTimes(3)
   })
+  it('retains a usable whole candidate if refinement and an alternative fail', async () => {
+    vi.useFakeTimers()
+    const start = request.waypoints[0].coordinate
+    const geometry = [start, [7.65, 47.02], [7.63, 46.82], [7.35, 46.8], start]
+    const fetchMock = vi.fn().mockResolvedValueOnce(Response.json({ code: 'Ok', routes: [{ distance: 80_000, duration: 6000, geometry: { type: 'LineString', coordinates: geometry } }] })).mockRejectedValueOnce(new Error('refinement unavailable')).mockRejectedValueOnce(new Error('alternative unavailable')).mockResolvedValueOnce(Response.json([]))
+    vi.stubGlobal('fetch', fetchMock)
+    const promise = new FossgisBikeProvider().plan({ ...request, mode: 'round-trip', targetDistanceKm: 60, waypoints: [request.waypoints[0]] })
+    await vi.runAllTimersAsync()
+    const planned = await promise
+    expect(planned.geometry.coordinates).toEqual(geometry)
+    expect(planned.warnings.join(' ')).toContain('Schleifenqualität')
+    expect(fetchMock).toHaveBeenCalledTimes(4)
+  })
 })

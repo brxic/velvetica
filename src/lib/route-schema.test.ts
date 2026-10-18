@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { homePointSchema, plannedRouteSchema } from './route-schema'
+import { rideTestRoute } from '../../test-fixtures/ride-route'
 
 describe('saved route validation', () => {
+  it('preserves optional data-availability flags without breaking legacy routes', () => {
+    expect(plannedRouteSchema.parse(rideTestRoute).metrics.elevationAnalyzed).toBe(true)
+    const metrics = { ...rideTestRoute.metrics, elevationAnalyzed: undefined }
+    expect(plannedRouteSchema.safeParse({ ...rideTestRoute, metrics }).success).toBe(true)
+    expect(plannedRouteSchema.parse({ ...rideTestRoute, metrics: { ...metrics, surfaceAnalyzed: false } }).metrics.surfaceAnalyzed).toBe(false)
+  })
   it('rejects malformed identifiers and out-of-range geometry', () => {
     const parsed = plannedRouteSchema.safeParse({ id: 'not-an-id', name: 'Bad route', geometry: { type: 'LineString', coordinates: [[999, 999], [7, 46]] } })
     expect(parsed.success).toBe(false)

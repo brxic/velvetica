@@ -1,7 +1,8 @@
 import type { Coordinate, PlannedRoute, PlanningRequest } from '@/lib/domain'
 import { createRouteName } from '@/lib/route-name'
 import type { RoutingProvider } from './provider'
-import { createRoundTripSeeds, evaluateRoundTrip } from './round-trip-quality'
+import { compareRouteQuality, createRoundTripSeeds, evaluateRoundTrip, usableRoundTrip } from './round-trip-quality'
+import { validateRoutedGeometry } from './geometry-quality'
 import { cumulativeDistances } from '@/lib/route-analysis'
 
 type OsrmRoute = { distance: number; duration: number; geometry: GeoJSON.LineString }
@@ -95,21 +96,23 @@ export class FossgisBikeProvider implements RoutingProvider {
       const firstDistanceKm = selected.route.distance / 1000
       if (Math.abs(firstDistanceKm - request.targetDistanceKm) / request.targetDistanceKm > .15) {
         const correction = Math.max(.65, Math.min(1.35, request.targetDistanceKm / Math.max(1, firstDistanceKm)))
-        const corrected = await routeSeed(correction)
-        if (qualityOf(corrected).score < qualityOf(selected).score) selected = corrected
+        try {
+          const corrected = await routeSeed(correction)
+          if (compareRouteQuality(qualityOf(corrected), qualityOf(selected)) < 0) selected = corrected
+        } catch { /* A failed refinement must not discard a complete candidate. */ }
       }
       // Choose another road-following candidate rather than clipping the geometry.
       // At most three router requests keep the public provider load and duration bounded.
       if (!qualityOf(selected).acceptable) {
         try {
           const alternative = await routeSeed(1, 1)
-          if (qualityOf(alternative).score < qualityOf(selected).score) selected = alternative
+          if (compareRouteQuality(qualityOf(alternative), qualityOf(selected)) < 0) selected = alternative
         } catch { /* Keep the last complete candidate and its explicit warning. */ }
       }
       const anchors = selected.anchors
       routed = selected.route
       const quality = evaluateRoundTrip(routed.geometry.coordinates as Coordinate[], explicit[0], routed.distance / 1000, request.targetDistanceKm)
-      if (quality.repeatedShare > .65 || quality.radialExcess > 1) throw new Error('ROUTE_QUALITY_FAILED')
+      if (!usableRoundTrip(quality)) throw new Error('ROUTE_QUALITY_FAILED')
       if (!quality.acceptable) qualityWarning = [request.locale === 'de' ? 'Die Rundtour erreicht die gewünschte Distanz oder Schleifenqualität nicht vollständig. Prüfe den Verlauf und passe ihn mit einem Via-Punkt an.' : 'The round trip does not fully meet the requested distance or loop quality. Review its shape and adjust it with a via point.']
       generatedWaypoints = anchors.map((coordinate, index) => ({ id: `generated-fossgis-${index}`, coordinate, label: `Generated anchor ${index + 1}`, kind: 'generated' }))
     } else {
@@ -117,13 +120,14 @@ export class FossgisBikeProvider implements RoutingProvider {
       routed = await this.route(locations)
     }
     const coordinates = routed.geometry.coordinates as Coordinate[]
+    validateRoutedGeometry(coordinates, routed.distance / 1000, request)
     const elevation = await fetchElevationProfile(coordinates)
     const now = new Date().toISOString()
     const de = request.locale === 'de'
     return {
       id: crypto.randomUUID(), name: createRouteName(request.locale, request.profile, request.mode, request.waypoints), createdAt: now, updatedAt: now,
       profile: request.profile, mode: request.mode, geometry: routed.geometry, waypoints: [...request.waypoints, ...generatedWaypoints],
-      metrics: { distanceKm: Math.round(routed.distance / 100) / 10, durationMinutes: Math.max(1, Math.round(routed.duration / 60)), elevationGainM: elevation.gain, elevationLossM: elevation.loss, asphaltPercent: 0, cyclewayPercent: 0, confidence: 'verified', elevationProfile: elevation.profile, elevationDistancesKm: elevation.distances },
+      metrics: { distanceKm: Math.round(routed.distance / 100) / 10, durationMinutes: Math.max(1, Math.round(routed.duration / 60)), elevationGainM: elevation.gain, elevationLossM: elevation.loss, asphaltPercent: 0, cyclewayPercent: 0, surfaceAnalyzed: false, confidence: 'verified', elevationProfile: elevation.profile, elevationDistancesKm: elevation.distances },
       warnings: [...qualityWarning, de ? 'Untergrund und Radweganteil sind bei diesem Router nicht analysiert.' : 'Surface and cycleway share are not analysed by this router.', de ? 'Dieser Router verwendet ein allgemeines Fahrradprofil. Fahrradtyp und zusätzliche Wünsche werden hier nicht getrennt berücksichtigt.' : 'This router uses a general bicycle profile. Bike types and additional preferences are not handled separately.'],
       provenance: { routingEngine: 'FOSSGIS OSRM Bike', primaryDataSource: 'OpenStreetMap · swisstopo elevation', graphVersion: 'FOSSGIS rolling OSM graph', dataUpdatedAt: now, analyzedAt: now, regionId: 'ch', confidence: elevation.profile.length ? 'medium' : 'low' },
     }

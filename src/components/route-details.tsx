@@ -10,11 +10,11 @@ const formatDuration = (minutes: number) => `${Math.floor(minutes / 60)}:${Strin
 export function RouteDetails({ route, locale, speedKmh, activeIndex, onActiveIndexChange, condensed = false }: Props) {
   const copy = t(locale)
   const isGpxImport = route.provenance.routingEngine === 'GPX Import'
-  const hasSurfaceAnalysis = !isGpxImport && route.provenance.routingEngine !== 'FOSSGIS OSRM Bike'
+  const hasSurfaceAnalysis = route.metrics.surfaceAnalyzed ?? (route.provenance.routingEngine.startsWith('Valhalla') && route.provenance.confidence === 'high')
   return <div className={`route-details ${condensed ? 'is-condensed' : ''}`}><div className="metric-grid">
         <div><RouteIcon /><span>{copy.distanceLabel}</span><strong>{route.metrics.distanceKm} km</strong></div>
         <div><Clock3 /><span>{copy.time}{speedKmh ? ` · ${speedKmh} km/h` : ''}</span><strong>{formatDuration(speedKmh ? Math.round(route.metrics.distanceKm / speedKmh * 60) : route.metrics.durationMinutes)}</strong></div>
-        <div><Mountain /><span>{copy.elevation}</span><strong>{route.metrics.elevationGainM} m</strong></div>
+        <div><Mountain /><span>{copy.elevation}</span><strong>{route.metrics.elevationAnalyzed !== false && route.metrics.elevationProfile.length > 1 ? `${route.metrics.elevationGainM} m` : '—'}</strong></div>
         <div><Bike /><span>{copy.surface}</span><strong>{hasSurfaceAnalysis ? `${route.metrics.asphaltPercent} %` : '—'}</strong></div>
       </div>
       <div className="route-detail-grid">

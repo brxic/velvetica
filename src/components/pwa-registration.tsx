@@ -88,7 +88,7 @@ export function PwaRegistration() {
   async function applyUpdate() {
     if (!waiting || applyingRef.current) return
     if (!online) { setMessage(de ? 'Verbinde dich für das Update mit dem Internet.' : 'Connect to the internet to update.'); return }
-    if (!canApplyPwaUpdate()) { setMessage(de ? 'Speichere oder beende zuerst deinen Entwurf. Laufende Aktionen bitte abwarten.' : 'Save or finish your draft first. Wait for pending actions.'); return }
+    if (!canApplyPwaUpdate()) { setMessage(de ? 'Speichere oder beende zuerst deinen Entwurf. Beende den Fahrmodus und warte laufende Aktionen ab.' : 'Save or finish your draft first. End ride mode and wait for pending actions.'); return }
     if (waiting.state === 'activated') { window.location.reload(); return }
     applyingRef.current = true; setApplying(true); setMessage(null)
     activationTimerRef.current = window.setTimeout(() => {

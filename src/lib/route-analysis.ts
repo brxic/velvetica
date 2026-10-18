@@ -82,7 +82,7 @@ function detectClimbs(samples: RouteAnalysisSample[]) {
 export function analyzeRoute(route: Pick<PlannedRoute, 'geometry' | 'metrics' | 'provenance'>): RouteAnalysis {
   const coordinates = route.geometry.coordinates as Coordinate[]
   const profile = route.metrics.elevationProfile
-  if (coordinates.length < 2 || profile.length < 2) return { samples: [], climbs: [] }
+  if (coordinates.length < 2 || profile.length < 2 || route.metrics.elevationAnalyzed === false) return { samples: [], climbs: [] }
   const distances = cumulativeDistances(coordinates)
   const projected = mercatorDistances(coordinates)
   const totalProjected = projected.at(-1) ?? 0

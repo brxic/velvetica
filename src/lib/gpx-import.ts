@@ -102,7 +102,7 @@ export function parseGpx(text: string, fileName: string, locale: Locale, profile
   return {
     id: crypto.randomUUID(), name: routeName, description: de ? `Originalimport aus ${fileName}` : `Original import from ${fileName}`,
     createdAt: now, updatedAt: now, profile, mode, geometry: { type: 'LineString', coordinates }, waypoints,
-    metrics: { distanceKm: Math.round(totalDistance * 10) / 10, durationMinutes: Math.max(1, Math.round(totalDistance / speedFor(profile) * 60)), elevationGainM: elevations.gain, elevationLossM: elevations.loss, asphaltPercent: 0, cyclewayPercent: 0, confidence: 'preview', elevationProfile },
+    metrics: { distanceKm: Math.round(totalDistance * 10) / 10, durationMinutes: Math.max(1, Math.round(totalDistance / speedFor(profile) * 60)), elevationGainM: elevations.gain, elevationLossM: elevations.loss, asphaltPercent: 0, cyclewayPercent: 0, surfaceAnalyzed: false, elevationAnalyzed: missingElevationCount < points.length, confidence: 'preview', elevationProfile },
     warnings,
     provenance: { routingEngine: 'GPX Import', primaryDataSource: fileName, graphVersion: 'original', dataUpdatedAt: now, analyzedAt: now, regionId: 'import', confidence: 'low' },
   }

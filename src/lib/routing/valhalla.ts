@@ -1,7 +1,8 @@
 import type { BikeProfile, Coordinate, Locale, PlannedRoute, PlanningRequest } from '@/lib/domain'
 import type { RoutingProvider } from './provider'
 import { decodePolyline } from './polyline'
-import { createRoundTripSeeds, evaluateRoundTrip, type RouteQuality } from './round-trip-quality'
+import { compareRouteQuality, createRoundTripSeeds, evaluateRoundTrip, usableRoundTrip, type RouteQuality } from './round-trip-quality'
+import { validateRoutedGeometry } from './geometry-quality'
 import { createRouteName } from '@/lib/route-name'
 import { cumulativeDistances } from '@/lib/route-analysis'
 
@@ -141,17 +142,18 @@ export class ValhallaProvider implements RoutingProvider {
 
       let candidates = await runSeeds(1)
       if (!candidates.length) throw new Error('VALHALLA_NO_ROUND_TRIP_CANDIDATE')
-      candidates.sort((a, b) => a.quality.score - b.quality.score)
+      candidates.sort((a, b) => compareRouteQuality(a.quality, b.quality))
 
       if (!candidates[0].quality.acceptable) {
         const correction = Math.max(.72, Math.min(1.28, request.targetDistanceKm / Math.max(1, candidates[0].candidate.distanceKm)))
         const retryScales = [correction, Math.max(.62, correction * .82), Math.min(1.38, correction * 1.18)]
         const retries = await Promise.all(retryScales.map(runSeeds))
-        candidates = [...candidates, ...retries.flat()].sort((a, b) => a.quality.score - b.quality.score)
+        candidates = [...candidates, ...retries.flat()].sort((a, b) => compareRouteQuality(a.quality, b.quality))
       }
 
       selected = candidates[0].candidate
       selectedQuality = candidates[0].quality
+      if (!usableRoundTrip(selectedQuality)) throw new Error('ROUTE_QUALITY_FAILED')
       generatedWaypoints = candidates[0].seed.locations.map((location, index) => ({
         id: `generated-${candidates[0].seed.id}-${index}`,
         coordinate: [location.lon, location.lat],
@@ -164,6 +166,7 @@ export class ValhallaProvider implements RoutingProvider {
     }
 
     const { coordinates, distanceKm, durationSeconds } = selected
+    validateRoutedGeometry(coordinates, distanceKm, request)
     const [elevation, attributes, graph] = await Promise.all([fetchElevation(this.baseUrl, coordinates), fetchRouteAttributes(this.baseUrl, coordinates, request.locale), fetchGraphMetadata(this.baseUrl)])
     const createdAt = new Date().toISOString()
     const qualityWarning = selectedQuality && !selectedQuality.acceptable
@@ -172,7 +175,7 @@ export class ValhallaProvider implements RoutingProvider {
     return {
       id: crypto.randomUUID(), name: createRouteName(request.locale, request.profile, request.mode, request.waypoints), createdAt, updatedAt: createdAt,
       profile: request.profile, mode: request.mode, geometry: { type: 'LineString', coordinates }, waypoints: [...request.waypoints, ...generatedWaypoints],
-      metrics: { distanceKm: Math.round(distanceKm * 10) / 10, durationMinutes: Math.round(durationSeconds / 60), elevationGainM: elevation.gain, elevationLossM: elevation.loss, asphaltPercent: attributes.asphaltPercent, cyclewayPercent: attributes.cyclewayPercent, confidence: 'verified', elevationProfile: elevation.profile, elevationDistancesKm: elevation.distances },
+      metrics: { distanceKm: Math.round(distanceKm * 10) / 10, durationMinutes: Math.round(durationSeconds / 60), elevationGainM: elevation.gain, elevationLossM: elevation.loss, asphaltPercent: attributes.asphaltPercent, cyclewayPercent: attributes.cyclewayPercent, surfaceAnalyzed: attributes.analyzed, confidence: 'verified', elevationProfile: elevation.profile, elevationDistancesKm: elevation.distances },
       warnings: [...qualityWarning, ...attributes.warnings],
       provenance: { routingEngine: `Valhalla ${graph.graphVersion}`, primaryDataSource: request.locale === 'de' ? 'OpenStreetMap / Geofabrik Schweiz' : 'OpenStreetMap / Geofabrik Switzerland', graphVersion: graph.graphVersion, dataUpdatedAt: graph.dataUpdatedAt, analyzedAt: createdAt, regionId: 'ch', confidence: attributes.analyzed && elevation.profile.length ? 'high' : 'medium' },
     }

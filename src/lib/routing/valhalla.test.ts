@@ -6,6 +6,14 @@ import { plannedRouteSchema } from '../route-schema'
 afterEach(() => vi.unstubAllGlobals())
 
 describe('Valhalla route attributes', () => {
+  it('rejects severely retraced automatic loops before requesting extra attributes', async () => {
+    const start: [number, number] = [7.4474, 46.948]
+    const far: [number, number] = [7.6, 46.948]
+    const fetchMock = vi.fn(async () => Response.json({ trip: { summary: { length: 60, time: 6000 }, legs: [{ shape: { type: 'LineString', coordinates: [start, far, start, far, start, far, start] } }] } }))
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(new ValhallaProvider('http://valhalla.test').plan({ locale: 'de', mode: 'round-trip', profile: 'road', targetDistanceKm: 60, waypoints: [{ id: 'start', kind: 'start', label: 'Bern', coordinate: start }], preferences: { safety: 'quiet', climbing: 'balanced', surface: 'balanced' } })).rejects.toThrow('ROUTE_QUALITY_FAILED')
+    expect(fetchMock.mock.calls).toHaveLength(24)
+  })
   it('retains exact elevation distances after stride sampling, a missing height and the final point', async () => {
     const coordinates = Array.from({ length: 243 }, (_, index) => [7 + index * .0001, 47] as [number, number])
     vi.stubGlobal('fetch', vi.fn(async (input: string, init?: RequestInit) => {
