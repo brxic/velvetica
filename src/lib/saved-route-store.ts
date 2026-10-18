@@ -12,6 +12,9 @@ function pool() {
   return globalThis.velvetiaRoutePool
 }
 
+/** Shared server-only pool; optional services must not run route schema DDL. */
+export function databasePool() { return pool() }
+
 export function persistenceEnabled() { return Boolean(process.env.DATABASE_URL) }
 
 export async function ensureRouteSchema() {

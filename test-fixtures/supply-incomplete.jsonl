@@ -1,0 +1,2 @@
+{"type":"metadata","version":1,"regionId":"ch","snapshotAt":"2026-08-01T00:00:00Z"}
+{"osmType":"node","osmId":"1","geometry":{"type":"Point","coordinates":[7.45,46.95]},"properties":{"name":"QA incomplete export","amenity":"drinking_water"},"sourceUpdatedAt":null}

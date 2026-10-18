@@ -7,7 +7,7 @@ export type RideProgress = { distanceKm: number; remainingKm: number; offsetM: n
 export type RideTrack = ReturnType<typeof createRideTrack>
 
 export function rideableSource(route: PlannedRoute) {
-  return route.metrics.distanceKm > 0 && route.geometry.coordinates.length > 1 && (route.metrics.confidence === 'verified' || route.provenance.routingEngine === 'GPX Import')
+  return route.metrics.distanceKm > 0 && route.geometry.coordinates.length > 1 && (route.metrics.confidence === 'verified' || route.provenance.routingEngine.startsWith('GPX'))
 }
 
 export function createRideTrack(route: PlannedRoute) {

@@ -1,6 +1,6 @@
 'use client'
 
-import { Copy, Pencil, ListOrdered } from 'lucide-react'
+import { Copy, Pencil, ListOrdered, Droplets } from 'lucide-react'
 import { Bike, Bookmark, Check, ChevronDown, CircleHelp, FileUp, History, Home, Languages, MapPin, Maximize2, SlidersHorizontal, Minimize2, Moon, Navigation, Redo2, RotateCcw, Route as RouteIcon, Search, Sparkles, Star, Sun, Trash2, Undo2, X } from 'lucide-react'
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { BrandLogo } from './brand-logo'
@@ -32,6 +32,8 @@ import { resolveWorkspaceIdentity } from '@/lib/workspace-identity-client'
 import { WaypointEditor } from './waypoint-editor'
 import { usePanelBack } from './use-panel-back'
 import { useVisualViewport } from './use-visual-viewport'
+import { useSupply } from './use-supply'
+import { SupplyPanel } from './supply-panel'
 
 const LEGACY_STORAGE_KEY = 'velvetia.saved-routes.v1'
 const STORAGE_KEY_PREFIX = 'velvetia.saved-routes.v2'
@@ -122,6 +124,18 @@ export function PlannerApp() {
   const [routeDetailsExpanded, setRouteDetailsExpanded] = useState(false)
   const [editingRouteId, setEditingRouteId] = useState<string | null>(null)
   const editing = Boolean(route && editingRouteId === route.id)
+  const supply = useSupply(route, preferences, locale)
+  const supplyVisible = Boolean(route && supply.open && !plannerOpen && !editing && !ride.route && !showSaved && !rideSetup && !routeDetailsExpanded)
+  const [stopSnapshots, setStopSnapshots] = useState(new Map<string, PlannedRoute>())
+  const stopKey = (value: PlannedRoute) => `${value.id}:${JSON.stringify(value.waypoints)}`
+  const beforeStop = route && waypointHistory.past.length ? stopSnapshots.get(`${route.id}:${JSON.stringify(waypointHistory.past.at(-1))}`) : undefined
+  const canUndoStop = Boolean(route && beforeStop && stopSnapshots.get(stopKey(route))?.geometry === route.geometry)
+  function acceptSupplyStop(candidate: PlannedRoute) {
+    if (!route || !supply.quote?.value || supply.quote.value.route !== candidate) return
+    setStopSnapshots((current) => { const next = new Map(current); next.set(stopKey(route), route); next.set(stopKey(candidate), candidate); if (next.size > 40) next.delete(next.keys().next().value!); return next })
+    dispatchWaypoints({ type: 'commit', waypoints: candidate.waypoints }); setRoute({ ...candidate, name: route.name, description: route.description, serverVersion: route.serverVersion, favorite: route.favorite }); supply.close()
+    setNotice(locale === 'de' ? 'Stopp eingefügt. Die Route ist noch nicht gespeichert.' : 'Stop added. The route has not been saved yet.')
+  }
   const [waypointEditorOpen, setWaypointEditorOpen] = useState(false)
   const [selectedWaypointId, setSelectedWaypointId] = useState<string | null>(null)
   const [focusWarnings, setFocusWarnings] = useState(false)
@@ -470,8 +484,9 @@ export function PlannerApp() {
   }
   async function clearPlace(kind: 'start' | 'end') { if (!(await confirmDiscard())) return false; cancelPlanning(); setRoute(null); dispatchWaypoints({ type: 'commit', waypoints: waypoints.filter((point) => point.kind !== kind) }); return true }
   function removeWaypoint(id: string) { const next = waypoints.filter((point) => point.id !== id); dispatchWaypoints({ type: 'commit', waypoints: next }); if (route) void requestRoute(next, true); else setRoute(null) }
-  function undoWaypoints() { const next = waypointHistory.past.at(-1); if (!next) return; dispatchWaypoints({ type: 'undo' }); if (route) void requestRoute(next, true); else setRoute(null) }
-  function redoWaypoints() { const next = waypointHistory.future[0]; if (!next) return; dispatchWaypoints({ type: 'redo' }); if (route) void requestRoute(next, true); else setRoute(null) }
+  function restoreStopSnapshot(next: Waypoint[]) { const snapshot = route && stopSnapshots.get(`${route.id}:${JSON.stringify(next)}`); if (!snapshot || !route) return false; setRoute({ ...snapshot, name: route.name, description: route.description, favorite: route.favorite, serverVersion: route.serverVersion, updatedAt: route.updatedAt }); return true }
+  function undoWaypoints() { const next = waypointHistory.past.at(-1); if (!next) return; dispatchWaypoints({ type: 'undo' }); if (route) { if (!restoreStopSnapshot(next)) void requestRoute(next, true) } else setRoute(null) }
+  function redoWaypoints() { const next = waypointHistory.future[0]; if (!next) return; dispatchWaypoints({ type: 'redo' }); if (route) { if (!restoreStopSnapshot(next)) void requestRoute(next, true) } else setRoute(null) }
 
   const visibleSavedRoutes = savedRoutes
     .filter((saved) => saved.name.toLocaleLowerCase(locale).includes(savedSearch.trim().toLocaleLowerCase(locale)))
@@ -498,7 +513,7 @@ export function PlannerApp() {
     window.addEventListener('beforeunload', protectDraft)
     return () => window.removeEventListener('beforeunload', protectDraft)
   }, [hasUnsavedChanges, saving])
-  const isGpxImport = route?.provenance.routingEngine === 'GPX Import'
+  const isGpxImport = route?.provenance.routingEngine.startsWith('GPX')
 
   function toggleTheme() { const next = theme === 'light' ? 'dark' : 'light'; setTheme(next); try { localStorage.setItem(THEME_KEY, next) } catch { /* Theme remains usable without persistence. */ } }
   async function importGpx(file: File) {
@@ -539,7 +554,7 @@ export function PlannerApp() {
     document.documentElement.lang = locale === 'de' ? 'de-CH' : 'en'
   }, [theme, locale])
 
-  const backPanel = rideSetup ? 'ride-setup' : ride.route ? 'ride' : waypointEditorOpen && editing ? 'waypoints' : showSaved ? 'library' : routeDetailsExpanded && compactViewport ? 'details' : showGuide ? 'guide' : editing ? 'editing' : compactViewport && plannerOpen && (route || waypoints.length) ? 'planning' : null
+  const backPanel = rideSetup ? 'ride-setup' : ride.route ? 'ride' : waypointEditorOpen && editing ? 'waypoints' : showSaved ? 'library' : routeDetailsExpanded && compactViewport ? 'details' : showGuide ? 'guide' : supplyVisible ? 'supply' : editing ? 'editing' : compactViewport && plannerOpen && (route || waypoints.length) ? 'planning' : null
   usePanelBack(backPanel, () => {
     if (rideSetup) setRideSetup(false)
     else if (ride.route) ride.stop()
@@ -547,6 +562,7 @@ export function PlannerApp() {
     else if (showSaved) setShowSaved(false)
     else if (routeDetailsExpanded && compactViewport) setRouteDetailsExpanded(false)
     else if (showGuide) closeGuide()
+    else if (supplyVisible) supply.close()
     else if (editing) { if (isPlanning) cancelPlanning(); setEditingRouteId(null) }
     else setPlannerOpen(false)
   })
@@ -562,9 +578,9 @@ export function PlannerApp() {
     return () => window.removeEventListener('keydown', escape)
   }, [editing, isPlanning])
 
-  return <main id="planner" className={`app-shell theme-${theme} ${ride.route ? 'is-riding' : ''} ${editing ? 'is-editing' : ''} ${plannerOpen ? 'has-planner' : ''} ${route && routeDetailsExpanded && !compactViewport ? 'has-expanded-route' : ''}`}>
+  return <main id="planner" className={`app-shell theme-${theme} ${ride.route ? 'is-riding' : ''} ${editing ? 'is-editing' : ''} ${supplyVisible ? 'has-supply-panel' : ''} ${plannerOpen ? 'has-planner' : ''} ${route && routeDetailsExpanded && !compactViewport ? 'has-expanded-route' : ''}`}>
     <a href="#planner-controls" className="skip-link">{locale === 'de' ? 'Zur Routenplanung' : 'Skip to route planning'}</a>
-    <MapCanvas theme={theme} activeRoute={ride.route ?? route} savedRoutes={savedRoutes} waypoints={ride.route?.waypoints ?? waypoints} onMapClick={handleMapClick} onWaypointMove={handleWaypointMove} onRouteShape={handleRouteShape} activeProfileIndex={activeProfileIndex} onActiveProfileIndexChange={setActiveProfileIndex} locale={locale} riding={Boolean(ride.route)} rideFix={ride.fresh ? ride.fix : null} following={ride.following} onFollowChange={ride.setFollowing} editing={editing || !route} onWaypointSelect={openWaypointEditor} />
+    <MapCanvas theme={theme} activeRoute={ride.route ?? (supplyVisible ? supply.quote?.value?.route : null) ?? route} comparisonRoute={supplyVisible && supply.quote?.value ? route : null} savedRoutes={savedRoutes} waypoints={ride.route?.waypoints ?? (supplyVisible ? supply.quote?.value?.route.waypoints : undefined) ?? waypoints} onMapClick={handleMapClick} onWaypointMove={handleWaypointMove} onRouteShape={handleRouteShape} activeProfileIndex={supplyVisible && supply.quote?.value ? null : activeProfileIndex} onActiveProfileIndexChange={setActiveProfileIndex} locale={locale} riding={Boolean(ride.route)} rideFix={ride.fresh ? ride.fix : null} following={ride.following} onFollowChange={ride.setFollowing} editing={editing || !route} onWaypointSelect={openWaypointEditor} supplyPois={supply.enabled && !editing && !ride.route ? supply.result?.pois : undefined} onSupplySelect={supply.select} />
     <RidePanel session={ride} locale={locale} />
 
     <header className="topbar">
@@ -587,7 +603,7 @@ export function PlannerApp() {
 
     <button className={`mobile-panel-toggle ${plannerOpen ? 'is-panel-open' : ''}`} aria-expanded={plannerOpen} aria-controls="planner-controls" onClick={() => setPlannerOpen(!plannerOpen)} aria-label={plannerOpen ? (locale === 'de' ? 'Planungsmenü schliessen' : 'Close planning menu') : (locale === 'de' ? 'Planungsmenü öffnen' : 'Open planning menu')}><SlidersHorizontal size={17} aria-hidden="true" /><span>{locale === 'de' ? 'Planung' : 'Plan'}</span><ChevronDown className="panel-toggle-chevron" size={14} aria-hidden="true" /></button>
 
-    {route && !ride.route ? <div className="route-edit-hint" role="toolbar" aria-label={locale === 'de' ? 'Routenbearbeitung' : 'Route editing'}>{editing ? <><span className="edit-mode-label">{locale === 'de' ? 'Bearbeiten' : 'Editing'}</span><Button className="edit-waypoints-button" onClick={() => openWaypointEditor()}><ListOrdered size={17} />{locale === 'de' ? 'Wegpunkte' : 'Waypoints'}</Button><Button variant="icon" disabled={!waypointHistory.past.length || isPlanning} onClick={undoWaypoints} aria-label={locale === 'de' ? 'Rückgängig' : 'Undo'}><Undo2 size={17} /></Button><Button variant="icon" disabled={!waypointHistory.future.length || isPlanning} onClick={redoWaypoints} aria-label={locale === 'de' ? 'Wiederholen' : 'Redo'}><Redo2 size={17} /></Button><Button variant="primary" disabled={isPlanning} onClick={finishEditing}>{locale === 'de' ? 'Fertig' : 'Done'}</Button></> : <Button className="edit-route-button" onClick={startEditing}><Pencil size={17} />{locale === 'de' ? 'Route bearbeiten' : 'Edit route'}</Button>}</div> : null}
+    {route && !ride.route ? <div className="route-edit-hint" role="toolbar" aria-label={locale === 'de' ? 'Routenbearbeitung' : 'Route editing'}>{editing ? <><span className="edit-mode-label">{locale === 'de' ? 'Bearbeiten' : 'Editing'}</span><Button className="edit-waypoints-button" onClick={() => openWaypointEditor()}><ListOrdered size={17} />{locale === 'de' ? 'Wegpunkte' : 'Waypoints'}</Button><Button variant="icon" disabled={!waypointHistory.past.length || isPlanning} onClick={undoWaypoints} aria-label={locale === 'de' ? 'Rückgängig' : 'Undo'}><Undo2 size={17} /></Button><Button variant="icon" disabled={!waypointHistory.future.length || isPlanning} onClick={redoWaypoints} aria-label={locale === 'de' ? 'Wiederholen' : 'Redo'}><Redo2 size={17} /></Button><Button variant="primary" disabled={isPlanning} onClick={finishEditing}>{locale === 'de' ? 'Fertig' : 'Done'}</Button></> : <><Button className="edit-route-button" onClick={() => { supply.close(); startEditing() }}><Pencil size={17} />{locale === 'de' ? 'Route bearbeiten' : 'Edit route'}</Button><Button variant="icon" className="supply-toggle" disabled={isPlanning} aria-label={locale === 'de' ? 'Versorgung entlang der Route' : 'Supplies along the route'} aria-pressed={supply.enabled} onClick={() => { setPlannerOpen(false); setRouteDetailsExpanded(false); supply.show() }}><Droplets size={19} /></Button></>}</div> : null}
     {editing && !ride.route && <p className="edit-instruction" role="note">{locale === 'de' ? 'Linie antippen oder ziehen. Punkte zum Ändern antippen. Danach die Route speichern.' : 'Tap or drag the line. Tap points to change them. Save the route when finished.'}</p>}
 
     <aside id="planner-controls" tabIndex={-1} inert={!plannerOpen} className={`planner-panel ${plannerOpen ? 'is-open' : ''}`} aria-label={locale === 'de' ? 'Routeneinstellungen' : 'Route settings'}>
@@ -701,6 +717,7 @@ export function PlannerApp() {
     {notice && <div className="workspace-notice" role="status"><span>{notice}</span><button onClick={() => setNotice(null)} aria-label={locale === 'de' ? 'Hinweis schliessen' : 'Dismiss notice'}><X size={17} /></button></div>}
 
     {route && editing && <WaypointEditor key={route.id} open={waypointEditorOpen} onOpenChange={setWaypointEditorOpen} locale={locale} waypoints={waypoints} selectedId={selectedWaypointId} onSelect={setSelectedWaypointId} busy={isPlanning} notice={notice} onChange={changeEditorPoint} onAdd={addEditorPoint} onRemove={removeWaypoint} onReorder={reorderEditorPoint} />}
+    {route && <SupplyPanel supply={supply} locale={locale} open={supplyVisible} onAccept={acceptSupplyStop} canUndo={canUndoStop} onUndo={() => { supply.close(); undoWaypoints() }} onEditStops={() => { supply.close(); startEditing(); openWaypointEditor(route.waypoints.find((point) => point.id.startsWith('supply-'))?.id) }} />}
     {confirmation}
     <footer className="font-credit">Fonts made from <a href="http://www.onlinewebfonts.com" target="_blank" rel="noreferrer">Web Fonts</a> is licensed by CC BY 4.0</footer>
   </main>

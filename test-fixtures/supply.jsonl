@@ -1,0 +1,8 @@
+{"type":"metadata","version":1,"regionId":"ch","snapshotAt":"2026-08-01T00:00:00Z"}
+{"osmType":"node","osmId":"1","geometry":{"type":"Point","coordinates":[7.45,46.95]},"properties":{"name":"QA Brunnen","amenity":"drinking_water"},"sourceUpdatedAt":null}
+{"osmType":"node","osmId":"2","geometry":{"type":"Point","coordinates":[7.45,46.951]},"properties":{"name":"QA Café","amenity":"cafe","opening_hours":"Mo-Fr 08:00-17:00"},"sourceUpdatedAt":null}
+{"osmType":"node","osmId":"3","geometry":{"type":"Point","coordinates":[7.45,46.96]},"properties":{"shop":"supermarket"},"sourceUpdatedAt":null}
+{"osmType":"node","osmId":"4","geometry":{"type":"Point","coordinates":[7.45,46.95]},"properties":{"amenity":"drinking_water","drinking_water":"no"},"sourceUpdatedAt":null}
+{"osmType":"node","osmId":"5","geometry":{"type":"Point","coordinates":[7.45,46.95]},"properties":{"amenity":"cafe","access":"private"},"sourceUpdatedAt":null}
+{"osmType":"way","osmId":"6","geometry":{"type":"MultiPolygon","coordinates":[[[[7.451,46.951],[7.452,46.951],[7.452,46.952],[7.451,46.951]]]]},"properties":{"name":"QA Bäckerei","shop":"bakery"},"sourceUpdatedAt":null}
+{"type":"complete","count":6}

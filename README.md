@@ -13,12 +13,15 @@ Mit Velvetia planst du Fahrradrouten in der Schweiz und bearbeitest ihren Verlau
 - Routen lokal speichern oder mit eingerichtetem Supabase-Konto synchronisieren. Gespeicherte Routen erscheinen auch auf der Karte.
 - Frühere Versionen wiederherstellen und Routen über widerrufbare Links teilen.
 - Deutsche und englische Oberfläche, helles und dunkles Design sowie PWA-Installation.
+- Optionale Versorgungsebene mit Trinkwasser, Verpflegung und Lebensmittelgeschäften im Routenkorridor. Stopps werden mit berechnetem Umweg vorgeschlagen und erst nach Bestätigung eingefügt; der übrige Verlauf bleibt erhalten.
 
 Zur Auswahl stehen Rennrad, Gravel, Freizeit/Touring und Alltag/City. Mountainbike wird nicht unterstützt. Der öffentliche FOSSGIS-Router verwendet für alle Fahrradtypen dasselbe Profil; die Unterscheidung und zusätzliche Routenwünsche benötigen Valhalla. Die Länderabdeckung ist konfigurierbar, aktuell ist die Schweiz eingerichtet.
 
 Der ursprüngliche [Umsetzungsplan](./VELVETIA_UMSETZUNGSPLAN.md) beschreibt auch noch nicht implementierte Ausbaustufen.
 
 Lokale Entwurfswiederherstellung, konkrete Routingfehler und die Ergebnisse der realen Schweizer Routingprüfung sind in [docs/PACKAGE_A.md](./docs/PACKAGE_A.md) dokumentiert. Die dort aufgeführten offenen Live-Fälle sind keine bestandene Feldabnahme.
+
+Die Versorgung benötigt den eigenen OSM-/PostGIS-Index. Ohne Einrichtung bleibt sie ausdrücklich nicht verfügbar, während Planung, Speicherung und Export weiter funktionieren. Einrichtung, Datenstand und Grenzen: [docs/PACKAGE_C.md](./docs/PACKAGE_C.md).
 
 ## Marke
 

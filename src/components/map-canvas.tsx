@@ -9,6 +9,7 @@ import { analyzeRoute, gradeGradientStops } from '@/lib/route-analysis'
 import { mapInsets } from '@/lib/map-layout'
 import { darkBasemapPaint, originalBasemapPaint, type MapPaintPatch, type MapTheme } from '@/lib/map-theme'
 import { locationAccuracyRing, type RideFix } from '@/lib/ride-progress'
+import type { SupplyPoi } from '@/lib/supply'
 
 type Props = {
   activeRoute: PlannedRoute | null
@@ -28,11 +29,14 @@ type Props = {
   onFollowChange?: (following: boolean) => void
   editing?: boolean
   onWaypointSelect?: (id: string) => void
+  supplyPois?: SupplyPoi[]
+  onSupplySelect?: (id: string) => void
+  comparisonRoute?: PlannedRoute | null
 }
 
 const emptyCollection = (): GeoJSON.FeatureCollection => ({ type: 'FeatureCollection', features: [] })
 
-export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onWaypointMove, onRouteShape, activeProfileIndex, onActiveProfileIndexChange, locale, readOnly = false, theme = 'light', riding = false, rideFix = null, following = false, onFollowChange, editing = true, onWaypointSelect }: Props) {
+export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onWaypointMove, onRouteShape, activeProfileIndex, onActiveProfileIndexChange, locale, readOnly = false, theme = 'light', riding = false, rideFix = null, following = false, onFollowChange, editing = true, onWaypointSelect, supplyPois, onSupplySelect, comparisonRoute }: Props) {
   const [mapStatus, setMapStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const themeRef = useRef(theme)
   const themeUpdateRef = useRef<() => void>(() => {})
@@ -41,6 +45,8 @@ export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onW
   const ridingRef = useRef(riding)
   const editingRef = useRef(editing)
   const waypointSelectRef = useRef(onWaypointSelect)
+  const supplySelectRef = useRef(onSupplySelect)
+  useEffect(() => { supplySelectRef.current = onSupplySelect }, [onSupplySelect])
   useEffect(() => { editingRef.current = editing; waypointSelectRef.current = onWaypointSelect }, [editing, onWaypointSelect])
   const followHandlerRef = useRef(onFollowChange)
   const userMarkerRef = useRef<Marker | null>(null)
@@ -167,6 +173,8 @@ export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onW
     map.on('load', () => {
       map.addSource('saved-routes', { type: 'geojson', data: emptyCollection() })
       map.addLayer({ id: 'saved-routes-line', type: 'line', source: 'saved-routes', paint: { 'line-color': '#676a70', 'line-width': 3, 'line-opacity': .42, 'line-dasharray': [2, 2] } })
+      map.addSource('stop-comparison', { type: 'geojson', data: emptyCollection() })
+      map.addLayer({ id: 'stop-comparison-line', type: 'line', source: 'stop-comparison', paint: { 'line-color': '#777b82', 'line-width': 6, 'line-dasharray': [2, 2] } })
       map.addSource('active-route', { type: 'geojson', data: emptyCollection(), lineMetrics: true })
       map.addLayer({ id: 'active-route-casing', type: 'line', source: 'active-route', paint: { 'line-color': '#ffffff', 'line-width': 9, 'line-opacity': .88 } })
       map.addLayer({ id: 'active-route-line', type: 'line', source: 'active-route', paint: { 'line-gradient': ['interpolate', ['linear'], ['line-progress'], 0, '#e00112', 1, '#e00112'], 'line-width': 5, 'line-opacity': 1 } })
@@ -175,6 +183,19 @@ export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onW
       map.addSource('ride-accuracy', { type: 'geojson', data: emptyCollection() })
       map.addLayer({ id: 'ride-accuracy-fill', type: 'fill', source: 'ride-accuracy', paint: { 'fill-color': '#287bea', 'fill-opacity': .12 } })
       map.addLayer({ id: 'ride-accuracy-line', type: 'line', source: 'ride-accuracy', paint: { 'line-color': '#287bea', 'line-width': 1, 'line-opacity': .6 } })
+      map.addSource('supply-pois', { type: 'geojson', data: emptyCollection(), cluster: true, clusterRadius: 38, clusterMaxZoom: 13 })
+      map.addLayer({ id: 'supply-clusters', type: 'circle', source: 'supply-pois', filter: ['has', 'point_count'], paint: { 'circle-radius': 15, 'circle-color': '#1e2025', 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 3 } })
+      map.addLayer({ id: 'supply-points', type: 'circle', source: 'supply-pois', filter: ['!', ['has', 'point_count']], paint: { 'circle-radius': 8, 'circle-color': ['match', ['get', 'category'], 'water', '#2c78bc', '#e00112'], 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 3 } })
+      map.addLayer({ id: 'supply-hit', type: 'circle', source: 'supply-pois', paint: { 'circle-radius': 22, 'circle-opacity': 0 } })
+      map.on('click', 'supply-hit', (event) => {
+        if (ridingRef.current || readOnly) return
+        const feature = event.features?.[0]
+        if (feature?.properties?.cluster) {
+          void (map.getSource('supply-pois') as GeoJSONSource).getClusterExpansionZoom(Number(feature.properties.cluster_id)).then((zoom) => { if (feature.geometry.type === 'Point') map.easeTo({ center: feature.geometry.coordinates as Coordinate, zoom, duration: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 250 }) }).catch(() => {})
+        } else if (typeof feature?.properties?.id === 'string') supplySelectRef.current?.(feature.properties.id)
+      })
+      map.on('mouseenter', 'supply-hit', () => { map.getCanvas().style.cursor = 'pointer' })
+      map.on('mouseleave', 'supply-hit', () => { map.getCanvas().style.cursor = '' })
       applyOverlayTheme()
       map.on('mouseenter', 'active-route-line', () => { map.getCanvas().style.cursor = readOnly || ridingRef.current || !editingRef.current ? 'grab' : 'url("/map-drag.svg") 14 14, grab' })
       map.on('mousemove', 'active-route-line', (event) => {
@@ -198,11 +219,22 @@ export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onW
         shapeHandlerRef.current(event.lngLat.lng, event.lngLat.lat, routeInsertionIndex(routeIndex, coordinates))
         window.setTimeout(() => { suppressNextClick = false }, 0)
       })
-      map.on('click', (event) => { if (!suppressNextClick && !ridingRef.current && editingRef.current) clickHandlerRef.current(event.lngLat.lng, event.lngLat.lat) })
+      map.on('click', (event) => { if (map.queryRenderedFeatures(event.point, { layers: ['supply-hit'] }).length) return; if (!suppressNextClick && !ridingRef.current && editingRef.current) clickHandlerRef.current(event.lngLat.lng, event.lngLat.lat) })
     })
     mapRef.current = map
     return () => { themeUpdateRef.current = () => {}; dragMarker?.remove(); map.remove(); mapRef.current = null }
   }, [readOnly])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    const update = () => {
+      (map.getSource('supply-pois') as GeoJSONSource | undefined)?.setData({ type: 'FeatureCollection', features: (supplyPois ?? []).map((poi) => ({ type: 'Feature', properties: { id: poi.id, category: poi.category }, geometry: { type: 'Point', coordinates: poi.coordinate } })) });
+      (map.getSource('stop-comparison') as GeoJSONSource | undefined)?.setData(comparisonRoute ? { type: 'Feature', properties: {}, geometry: comparisonRoute.geometry } : emptyCollection())
+    }
+    if (map.getSource('supply-pois')) update(); else map.once('load', update)
+    return () => { map.off('load', update) }
+  }, [supplyPois, comparisonRoute])
 
   useEffect(() => {
     const map = mapRef.current
@@ -243,7 +275,7 @@ export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onW
           mobileAttributionInitialized = true
         }
       }
-      const panels = [...workspace.querySelectorAll<HTMLElement>('.planner-panel, .route-summary, .shared-summary, .ride-panel')]
+      const panels = [...workspace.querySelectorAll<HTMLElement>('.planner-panel, .route-summary, .shared-summary, .ride-panel'), ...document.querySelectorAll<HTMLElement>('.supply-panel')]
       const header = workspace.querySelector<HTMLElement>(ridingRef.current ? '.ride-header' : '.topbar')
       const toolbar = ridingRef.current ? null : workspace.querySelector<HTMLElement>('.route-edit-hint')
       for (const element of [...panels, ...(header ? [header] : []), ...(toolbar ? [toolbar] : [])]) if (!observed.has(element)) { observed.add(element); observer.observe(element) }
