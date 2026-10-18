@@ -78,6 +78,7 @@ test('router errors provide distinct actionable feedback and retain the route', 
 test('a late routing response cannot replace a newer map edit', async ({ page }) => {
   await prepare(page)
   await page.getByRole('button', { name: 'Hinweis schliessen' }).click()
+  await page.getByRole('button', { name: 'Route bearbeiten', exact: true }).click()
   await expect.poll(() => page.evaluate(() => Object.keys(localStorage).some((key) => key.startsWith('velvetia.workspace.v1.')))).toBe(true)
   const original = await page.evaluate(() => JSON.parse(localStorage.getItem(Object.keys(localStorage).find((key) => key.startsWith('velvetia.workspace.v1.'))!)!).workspace.route) as PlannedRoute
   let releaseFirst!: () => void

@@ -36,7 +36,7 @@ test('theme switching preserves the map canvas and imported route; branding and 
     await expect(page.locator('.map-canvas')).toHaveAttribute('data-map-theme', theme)
     expect(await canvas.evaluate((element, previous) => element === previous, original)).toBe(true)
     await expect(name).toHaveValue('Theme-Test')
-    expect(await canvas.evaluate((element) => getComputedStyle(element).cursor)).toContain('map-crosshair.svg')
+    expect(await canvas.evaluate((element) => getComputedStyle(element).cursor)).toBe('grab')
     await page.screenshot({ path: testInfo.outputPath(`workspace-${theme}.png`), animations: 'disabled' })
   }
   await page.getByRole('button', { name: 'Route speichern', exact: true }).click()

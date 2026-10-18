@@ -1,4 +1,4 @@
-# Frontend-System: P1
+# Frontend-System
 
 ## Gestaltungsbasis
 
@@ -20,7 +20,11 @@
 
 Der Planer ist ein explizit ein-/ausblendbarer Arbeitszustand. Nach Berechnung oder Laden bleibt die Karte im Fokus. Ausführliche Desktop-Details stehen rechts; mobil gibt es eine kompakte, nicht intern scrollende Zusammenfassung und eine separat geöffnete vollständige Detailansicht. Warnungen, Untergrund und Datenherkunft sind dort erreichbar. Planung nutzt mobil ein Bottom Sheet mit erreichbarer Hauptaktion.
 
+Eine bestehende Route startet im Ansichtsmodus. Erst „Route bearbeiten“ aktiviert Geometrieänderungen. Die Wegpunktliste verwendet denselben Berechnungs- und Undo-Vertrag wie Kartenänderungen und dieselbe Base-UI-Suche wie die Planung. „Fertig“ beendet den Modus, die bestehende Speicheraktion bleibt separat. Warnungsaktionen fokussieren den tatsächlichen Hinweisabschnitt. Geteilte Routen verwenden ebenfalls `RouteDetails`.
+
 `map-layout.ts` berechnet freie Kartenränder aus den gemessenen Header-/Panel-Rechtecken. ResizeObserver und Layout-/Geometrieänderungen aktualisieren Kamera und Controls gemeinsam. Ein Style-/Daten-Idle-Ereignis stellt auch die erste Kameraanpassung nach asynchronem Kartenstart sicher. Safe Areas und reduzierte Bewegung werden berücksichtigt.
+
+Die Bearbeitungsleiste gehört ebenfalls zu diesen Kartenrändern. Kurze mobile Ansichten verwenden horizontale Kartencontrols. `useVisualViewport` liefert Tastaturhöhe und sichtbare Dialoghöhe, ohne Pinch-Zoom umzudeuten; Listener und CSS-Zustände werden beim Unmount entfernt. `usePanelBack` verwaltet einen reversiblen History-Eintrag für aktive Workspace-Ebenen. Er ist kein Ersatz für Next-Routing und keine globale Auth-Dialogverwaltung. Umfang und menschliche Abnahme: [Paket B](PACKAGE_B.md).
 
 ## Prüfen
 

@@ -1,7 +1,7 @@
 'use client'
 
-import { Copy } from 'lucide-react'
-import { Bike, Bookmark, Check, ChevronDown, CircleHelp, FileUp, History, Home, Languages, MapPin, Maximize2, SlidersHorizontal, Minimize2, Moon, MousePointer2, Navigation, Redo2, RotateCcw, Route as RouteIcon, Search, Sparkles, Star, Sun, Trash2, Undo2, X } from 'lucide-react'
+import { Copy, Pencil, ListOrdered } from 'lucide-react'
+import { Bike, Bookmark, Check, ChevronDown, CircleHelp, FileUp, History, Home, Languages, MapPin, Maximize2, SlidersHorizontal, Minimize2, Moon, Navigation, Redo2, RotateCcw, Route as RouteIcon, Search, Sparkles, Star, Sun, Trash2, Undo2, X } from 'lucide-react'
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { BrandLogo } from './brand-logo'
 import type { BikeProfile, HomePoint, Locale, PlannedRoute, RouteMode, RoutePreferences, RouteVersion, Waypoint } from '@/lib/domain'
@@ -29,6 +29,9 @@ import { RidePanel } from './ride-panel'
 import { routingErrorMessage } from '@/lib/routing/errors'
 import { useWorkspaceRecovery } from './use-workspace-recovery'
 import { resolveWorkspaceIdentity } from '@/lib/workspace-identity-client'
+import { WaypointEditor } from './waypoint-editor'
+import { usePanelBack } from './use-panel-back'
+import { useVisualViewport } from './use-visual-viewport'
 
 const LEGACY_STORAGE_KEY = 'velvetia.saved-routes.v1'
 const STORAGE_KEY_PREFIX = 'velvetia.saved-routes.v2'
@@ -65,6 +68,7 @@ function ensureEditableAnchors(route: PlannedRoute) {
 }
 
 export function PlannerApp() {
+  useVisualViewport()
   const ride = useRideSession()
   const [rideSetup, setRideSetup] = useState(false)
   const [locale, setLocale] = useState<Locale>('de'); const copy = t(locale)
@@ -116,6 +120,11 @@ export function PlannerApp() {
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
   const [showRouteDetails, setShowRouteDetails] = useState(true)
   const [routeDetailsExpanded, setRouteDetailsExpanded] = useState(false)
+  const [editingRouteId, setEditingRouteId] = useState<string | null>(null)
+  const editing = Boolean(route && editingRouteId === route.id)
+  const [waypointEditorOpen, setWaypointEditorOpen] = useState(false)
+  const [selectedWaypointId, setSelectedWaypointId] = useState<string | null>(null)
+  const [focusWarnings, setFocusWarnings] = useState(false)
   const gpxInputRef = useRef<HTMLInputElement>(null)
   const [persistenceState, setPersistenceState] = useState<'checking' | 'server' | 'local'>('checking')
   const [historyRouteId, setHistoryRouteId] = useState<string | null>(null)
@@ -222,6 +231,7 @@ export function PlannerApp() {
   }, [])
 
   function handleMapClick(longitude: number, latitude: number) {
+    if (route && !editing) return
     setNotice(null)
     let next: Waypoint[]
     if (!waypoints.some((point) => point.kind === 'start')) next = [{ id: crypto.randomUUID(), coordinate: [longitude, latitude], label: copy.start, kind: 'start' }]
@@ -234,7 +244,7 @@ export function PlannerApp() {
 
   async function requestRoute(points: Waypoint[], preserveExisting = false) {
     const valid = points.some((point) => point.kind === 'start') && (mode === 'round-trip' || points.some((point) => point.kind === 'end'))
-    if (!valid) { setNotice(copy.noStart); if (preserveExisting && activeRouteRef.current) dispatchWaypoints({ type: 'rollback', waypoints: activeRouteRef.current.waypoints }); return }
+    if (!valid) { setNotice(copy.noStart); if (preserveExisting && activeRouteRef.current) dispatchWaypoints({ type: 'rollback', waypoints: activeRouteRef.current.waypoints }); return false }
     routeRequestRef.current?.abort()
     const controller = new AbortController(); routeRequestRef.current = controller
     const previous = activeRouteRef.current
@@ -250,6 +260,7 @@ export function PlannerApp() {
       setRoute((current) => preserveExisting && current ? { ...planned, id: current.id, name: current.name, description: current.description, createdAt: current.createdAt, updatedAt: current.updatedAt, favorite: current.favorite, serverVersion: current.serverVersion } : planned)
       dispatchWaypoints({ type: preserveExisting ? 'replace' : 'reset', waypoints: planned.waypoints })
       setActiveProfileIndex(null); setPlannerOpen(false)
+      return true
     } catch (error) {
       if (routeRequestRef.current !== controller || controller.signal.aborted) return
       const code = error instanceof DOMException && error.name === 'TimeoutError' ? 'ROUTER_TIMEOUT' : error instanceof TypeError ? 'ROUTER_UNAVAILABLE' : error instanceof Error ? error.message : 'ROUTE_FAILED'
@@ -259,11 +270,42 @@ export function PlannerApp() {
         dispatchWaypoints({ type: 'rollback', waypoints: previous.waypoints })
         setPlannerOpen(false)
       }
+      return false
     }
     finally { if (routeRequestRef.current === controller) { routeRequestRef.current = null; setIsPlanning(false) } }
   }
 
   async function planRoute() { if (await confirmDiscard()) await requestRoute(waypoints, false) }
+
+  function startEditing() { if (!route) return; setEditingRouteId(route.id); setPlannerOpen(false); setRouteDetailsExpanded(false); setNotice(null); window.requestAnimationFrame(() => document.querySelector<HTMLButtonElement>('.edit-waypoints-button')?.focus()) }
+  function finishEditing() { if (isPlanning) return; setEditingRouteId(null); setWaypointEditorOpen(false); window.requestAnimationFrame(() => document.querySelector<HTMLButtonElement>('.edit-route-button')?.focus()) }
+  function openWaypointEditor(id: string | null = null) { setSelectedWaypointId(id ?? waypoints.find((point) => point.kind !== 'generated')?.id ?? null); setWaypointEditorOpen(true); setNotice(null) }
+  async function changeEditorPoint(id: string, place: { label: string; coordinate: [number, number] }) {
+    const next = waypoints.map((point) => point.id === id ? { ...point, ...place } : point)
+    dispatchWaypoints({ type: 'commit', waypoints: next })
+    return Boolean(await requestRoute(next, true))
+  }
+  async function addEditorPoint(place: { label: string; coordinate: [number, number] }) {
+    if (waypoints.length >= 20) return false
+    const point: Waypoint = { id: crypto.randomUUID(), ...place, kind: 'via' }
+    const next = [...waypoints]
+    const end = next.findIndex((point) => point.kind === 'end')
+    next.splice(end < 0 ? next.length : end, 0, point)
+    dispatchWaypoints({ type: 'commit', waypoints: next })
+    const success = Boolean(await requestRoute(next, true))
+    if (success) setSelectedWaypointId(point.id)
+    return success
+  }
+  function reorderEditorPoint(id: string, direction: -1 | 1) {
+    const editable = waypoints.filter((point) => point.kind === 'via' || point.kind === 'shaping')
+    const neighbor = editable[editable.findIndex((point) => point.id === id) + direction]
+    if (!neighbor) return
+    const next = [...waypoints], from = next.findIndex((point) => point.id === id), to = next.findIndex((point) => point.id === neighbor.id)
+    ;[next[from], next[to]] = [next[to], next[from]]
+    dispatchWaypoints({ type: 'commit', waypoints: next }); void requestRoute(next, true)
+  }
+  function openWarnings() { setFocusWarnings(true); setRouteDetailsExpanded(true); setShowRouteDetails(true); setPlannerOpen(false) }
+  function toggleExpandedDetails() { const expanded = !routeDetailsExpanded; setFocusWarnings(false); setRouteDetailsExpanded(expanded); if (expanded) { setShowRouteDetails(true); setPlannerOpen(false) } }
 
   function handleWaypointMove(id: string, longitude: number, latitude: number) {
     const next = waypoints.map((point) => point.id === id ? { ...point, coordinate: [longitude, latitude] as [number, number] } : point)
@@ -304,7 +346,7 @@ export function PlannerApp() {
   async function saveRoute(asCopy = false) {
     if (!route || saveInFlightRef.current) return
     const name = route.name.trim()
-    if (!name) { setNotice(locale === 'de' ? 'Bitte gib der Route einen Namen.' : 'Please give the route a name.'); return }
+    if (!name) { setNotice(locale === 'de' ? 'Bitte gib der Route einen Namen.' : 'Please give the route a name.'); document.querySelector<HTMLInputElement>('.route-name-input')?.focus(); return }
     setSaving(true); setSyncConflict(false); setNotice(null)
     saveInFlightRef.current = true
     const identityEpoch = identityEpochRef.current
@@ -389,7 +431,7 @@ export function PlannerApp() {
     setSaving(false)
   }
 
-  function cancelPlanning() { if (routeRequestRef.current && activeRouteRef.current) dispatchWaypoints({ type: 'rollback', waypoints: activeRouteRef.current.waypoints }); routeRequestRef.current?.abort(); routeRequestRef.current = null; setIsPlanning(false); setActiveProfileIndex(null) }
+  function cancelPlanning() { if (routeRequestRef.current && activeRouteRef.current) dispatchWaypoints({ type: 'rollback', waypoints: activeRouteRef.current.waypoints }); routeRequestRef.current?.abort(); routeRequestRef.current = null; setIsPlanning(false); setActiveProfileIndex(null); setEditingRouteId(null); setWaypointEditorOpen(false) }
   async function reset() { if (!(await confirmDiscard())) return; cancelPlanning(); setRoute(null); dispatchWaypoints({ type: 'reset' }); setNotice(null); setSyncConflict(false); setPlannerOpen(true); setRouteDetailsExpanded(false); const defaults = accountDefaultsRef.current; setProfile(defaults.profile); setDistance(defaults.distanceKm); setPreferences({ surface: defaults.surface, climbing: defaults.climbing, safety: defaults.safety }) }
   async function changeMode(nextMode: RouteMode) { if (nextMode === mode || !(await confirmDiscard())) return; cancelPlanning(); setMode(nextMode); setRoute(null); dispatchWaypoints({ type: 'commit', waypoints: waypoints.filter((point) => point.kind === 'start') }) }
   function closeGuide() { setShowGuide(false); try { localStorage.setItem(GUIDE_KEY, 'true') } catch { /* The guide can still be dismissed in this session. */ } }
@@ -497,9 +539,32 @@ export function PlannerApp() {
     document.documentElement.lang = locale === 'de' ? 'de-CH' : 'en'
   }, [theme, locale])
 
-  return <main id="planner" className={`app-shell theme-${theme} ${ride.route ? 'is-riding' : ''} ${plannerOpen ? 'has-planner' : ''} ${route && routeDetailsExpanded && !compactViewport ? 'has-expanded-route' : ''}`}>
+  const backPanel = rideSetup ? 'ride-setup' : ride.route ? 'ride' : waypointEditorOpen && editing ? 'waypoints' : showSaved ? 'library' : routeDetailsExpanded && compactViewport ? 'details' : showGuide ? 'guide' : editing ? 'editing' : compactViewport && plannerOpen && (route || waypoints.length) ? 'planning' : null
+  usePanelBack(backPanel, () => {
+    if (rideSetup) setRideSetup(false)
+    else if (ride.route) ride.stop()
+    else if (waypointEditorOpen && editing) setWaypointEditorOpen(false)
+    else if (showSaved) setShowSaved(false)
+    else if (routeDetailsExpanded && compactViewport) setRouteDetailsExpanded(false)
+    else if (showGuide) closeGuide()
+    else if (editing) { if (isPlanning) cancelPlanning(); setEditingRouteId(null) }
+    else setPlannerOpen(false)
+  })
+  useEffect(() => {
+    if (!editing) return
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !event.defaultPrevented && !document.querySelector('[role="dialog"], [role="alertdialog"]') && !isPlanning) {
+        setEditingRouteId(null)
+        window.requestAnimationFrame(() => document.querySelector<HTMLButtonElement>('.edit-route-button')?.focus())
+      }
+    }
+    window.addEventListener('keydown', escape)
+    return () => window.removeEventListener('keydown', escape)
+  }, [editing, isPlanning])
+
+  return <main id="planner" className={`app-shell theme-${theme} ${ride.route ? 'is-riding' : ''} ${editing ? 'is-editing' : ''} ${plannerOpen ? 'has-planner' : ''} ${route && routeDetailsExpanded && !compactViewport ? 'has-expanded-route' : ''}`}>
     <a href="#planner-controls" className="skip-link">{locale === 'de' ? 'Zur Routenplanung' : 'Skip to route planning'}</a>
-    <MapCanvas theme={theme} activeRoute={ride.route ?? route} savedRoutes={savedRoutes} waypoints={ride.route?.waypoints ?? waypoints} onMapClick={handleMapClick} onWaypointMove={handleWaypointMove} onRouteShape={handleRouteShape} activeProfileIndex={activeProfileIndex} onActiveProfileIndexChange={setActiveProfileIndex} locale={locale} riding={Boolean(ride.route)} rideFix={ride.fresh ? ride.fix : null} following={ride.following} onFollowChange={ride.setFollowing} />
+    <MapCanvas theme={theme} activeRoute={ride.route ?? route} savedRoutes={savedRoutes} waypoints={ride.route?.waypoints ?? waypoints} onMapClick={handleMapClick} onWaypointMove={handleWaypointMove} onRouteShape={handleRouteShape} activeProfileIndex={activeProfileIndex} onActiveProfileIndexChange={setActiveProfileIndex} locale={locale} riding={Boolean(ride.route)} rideFix={ride.fresh ? ride.fix : null} following={ride.following} onFollowChange={ride.setFollowing} editing={editing || !route} onWaypointSelect={openWaypointEditor} />
     <RidePanel session={ride} locale={locale} />
 
     <header className="topbar">
@@ -508,7 +573,7 @@ export function PlannerApp() {
       </button>
       <span className="brand-slogan">Plan less. Ride more.</span>
       <nav aria-label={locale === 'de' ? 'Hauptnavigation' : 'Main navigation'}>
-        <button className={`nav-button ${!showSaved ? 'is-active' : ''}`} onClick={() => { setShowSaved(false); setPlannerOpen(true) }}><RouteIcon size={18} /> {copy.planner}</button>
+        <button className={`nav-button ${!showSaved ? 'is-active' : ''}`} onClick={() => { cancelPlanning(); setShowSaved(false); setPlannerOpen(true) }}><RouteIcon size={18} /> {copy.planner}</button>
         <button className="nav-button" onClick={() => setShowSaved(true)}><Bookmark size={18} /> {copy.saved}<span className="count">{savedRoutes.length}</span></button>
       </nav>
       <div className="topbar-actions">
@@ -522,7 +587,8 @@ export function PlannerApp() {
 
     <button className={`mobile-panel-toggle ${plannerOpen ? 'is-panel-open' : ''}`} aria-expanded={plannerOpen} aria-controls="planner-controls" onClick={() => setPlannerOpen(!plannerOpen)} aria-label={plannerOpen ? (locale === 'de' ? 'Planungsmenü schliessen' : 'Close planning menu') : (locale === 'de' ? 'Planungsmenü öffnen' : 'Open planning menu')}><SlidersHorizontal size={17} aria-hidden="true" /><span>{locale === 'de' ? 'Planung' : 'Plan'}</span><ChevronDown className="panel-toggle-chevron" size={14} aria-hidden="true" /></button>
 
-    {route ? <div className="route-edit-hint" role="note"><MousePointer2 size={17} /><span>{locale === 'de' ? (compactViewport ? 'Linie antippen oder ziehen' : 'Route bearbeiten: Linie ziehen oder antippen') : (compactViewport ? 'Tap or drag the line' : 'Edit route: drag or tap the line')}</span></div> : null}
+    {route && !ride.route ? <div className="route-edit-hint" role="toolbar" aria-label={locale === 'de' ? 'Routenbearbeitung' : 'Route editing'}>{editing ? <><span className="edit-mode-label">{locale === 'de' ? 'Bearbeiten' : 'Editing'}</span><Button className="edit-waypoints-button" onClick={() => openWaypointEditor()}><ListOrdered size={17} />{locale === 'de' ? 'Wegpunkte' : 'Waypoints'}</Button><Button variant="icon" disabled={!waypointHistory.past.length || isPlanning} onClick={undoWaypoints} aria-label={locale === 'de' ? 'Rückgängig' : 'Undo'}><Undo2 size={17} /></Button><Button variant="icon" disabled={!waypointHistory.future.length || isPlanning} onClick={redoWaypoints} aria-label={locale === 'de' ? 'Wiederholen' : 'Redo'}><Redo2 size={17} /></Button><Button variant="primary" disabled={isPlanning} onClick={finishEditing}>{locale === 'de' ? 'Fertig' : 'Done'}</Button></> : <Button className="edit-route-button" onClick={startEditing}><Pencil size={17} />{locale === 'de' ? 'Route bearbeiten' : 'Edit route'}</Button>}</div> : null}
+    {editing && !ride.route && <p className="edit-instruction" role="note">{locale === 'de' ? 'Linie antippen oder ziehen. Punkte zum Ändern antippen. Danach die Route speichern.' : 'Tap or drag the line. Tap points to change them. Save the route when finished.'}</p>}
 
     <aside id="planner-controls" tabIndex={-1} inert={!plannerOpen} className={`planner-panel ${plannerOpen ? 'is-open' : ''}`} aria-label={locale === 'de' ? 'Routeneinstellungen' : 'Route settings'}>
       <div className="panel-intro"><p className="eyebrow">{locale === 'de' ? 'Schweizer Routenplaner' : 'Swiss route planner'}</p><h1>{locale === 'de' ? 'Wohin möchtest du fahren?' : 'Where do you want to ride?'}</h1><p>{locale === 'de' ? 'Suche deinen Startort oder wähle ihn auf der Karte.' : 'Search for your starting point or choose it on the map.'}</p></div>
@@ -582,9 +648,18 @@ export function PlannerApp() {
     </aside>
 
     {route && <section className={`route-summary ${routeDetailsExpanded && !compactViewport ? 'is-expanded' : ''}`} aria-label={locale === 'de' ? 'Routenzusammenfassung' : 'Route summary'}>
-      <div className="route-summary-head"><div><p className="eyebrow">{copy.routeReady}</p><input className="route-name-input" value={route.name} maxLength={80} aria-label={locale === 'de' ? 'Routenname' : 'Route name'} onChange={(event) => setRoute({ ...route, name: event.target.value })} /><textarea className="route-description-input" value={route.description ?? ''} maxLength={300} rows={1} placeholder={locale === 'de' ? 'Beschreibung hinzufügen …' : 'Add a description …'} aria-label={locale === 'de' ? 'Routenbeschreibung' : 'Route description'} onChange={(event) => setRoute({ ...route, description: event.target.value })} /></div><div className="route-statuses"><span data-state={currentSyncState} className={`save-status ${hasUnsavedChanges ? 'is-dirty' : ''}`}>{saveStatus}</span><span className={`preview-badge ${route.metrics.confidence === 'verified' ? 'is-verified' : ''}`}>{isGpxImport ? 'GPX Import' : route.metrics.confidence === 'verified' ? (locale === 'de' ? 'OSM-Routing' : 'OSM routing') : copy.preview}</span><button className="route-expand-toggle" onClick={() => { const expanded = !routeDetailsExpanded; setRouteDetailsExpanded(expanded); if (expanded) { setShowRouteDetails(true); setPlannerOpen(false) } }} aria-pressed={routeDetailsExpanded} aria-label={routeDetailsExpanded ? (locale === 'de' ? 'Kompakte Detailansicht' : 'Compact detail view') : (locale === 'de' ? 'Grosse Detailansicht neben der Karte' : 'Large detail view beside the map')}>{routeDetailsExpanded ? <Minimize2 size={15} /> : <Maximize2 size={15} />}<span>{routeDetailsExpanded ? (locale === 'de' ? 'Kompakt' : 'Compact') : (locale === 'de' ? 'Alle Details' : 'All details')}</span></button><button className={`route-detail-toggle ${showRouteDetails ? 'is-open' : ''}`} onClick={() => setShowRouteDetails(!showRouteDetails)} aria-expanded={showRouteDetails} aria-label={showRouteDetails ? (locale === 'de' ? 'Routendetails ausblenden' : 'Hide route details') : (locale === 'de' ? 'Routendetails einblenden' : 'Show route details')}><ChevronDown size={16} /><span>{showRouteDetails ? (locale === 'de' ? 'Details ausblenden' : 'Hide details') : (locale === 'de' ? 'Details anzeigen' : 'Show details')}</span></button></div></div>
-      {showRouteDetails && <RouteDetails route={route} locale={locale} speedKmh={speedKmh} activeIndex={activeProfileIndex} onActiveIndexChange={setActiveProfileIndex} condensed={!routeDetailsExpanded || compactViewport} />}
-      {!routeDetailsExpanded && route.warnings.length > 0 && <button className="route-warning-summary" onClick={() => { setRouteDetailsExpanded(true); setPlannerOpen(false) }}>{locale === 'de' ? `${route.warnings.length} Hinweise zur Route · in den Details prüfen` : `${route.warnings.length} route notes · review in details`}</button>}
+      <div className="route-summary-head"><div>
+        <div className="route-title-edit"><input id="route-name" className="route-name-input" value={route.name} maxLength={80} required aria-invalid={!route.name.trim()} aria-describedby={!route.name.trim() ? 'route-name-error' : undefined} aria-label={locale === 'de' ? 'Routenname' : 'Route name'} onBlur={(event) => { event.currentTarget.scrollLeft = 0 }} onChange={(event) => setRoute({ ...route, name: event.target.value })} /><Pencil size={15} aria-hidden="true" /></div>
+        {!route.name.trim() && <p id="route-name-error" className="field-error">{locale === 'de' ? 'Gib der Route einen Namen, bevor du sie speicherst.' : 'Name the route before saving it.'}</p>}
+        <textarea className="route-description-input" value={route.description ?? ''} maxLength={300} rows={1} placeholder={locale === 'de' ? 'Beschreibung hinzufügen …' : 'Add a description …'} aria-label={locale === 'de' ? 'Routenbeschreibung' : 'Route description'} onChange={(event) => setRoute({ ...route, description: event.target.value })} />
+      </div><div className="route-statuses">
+        <span data-state={currentSyncState} className={`save-status ${hasUnsavedChanges ? 'is-dirty' : ''}`}>{saveStatus}</span>
+        <span className={`preview-badge ${route.metrics.confidence === 'verified' ? 'is-verified' : ''}`}>{isGpxImport ? 'GPX Import' : route.metrics.confidence === 'verified' ? (locale === 'de' ? 'OSM-Routing' : 'OSM routing') : copy.preview}</span>
+        <button className="route-expand-toggle" onClick={toggleExpandedDetails} aria-pressed={routeDetailsExpanded} aria-label={routeDetailsExpanded ? (locale === 'de' ? 'Kompakte Detailansicht' : 'Compact detail view') : (locale === 'de' ? 'Grosse Detailansicht neben der Karte' : 'Large detail view beside the map')}>{routeDetailsExpanded ? <Minimize2 size={15} /> : <Maximize2 size={15} />}<span>{routeDetailsExpanded ? (locale === 'de' ? 'Kompakt' : 'Compact') : (locale === 'de' ? 'Alle Details' : 'All details')}</span></button>
+        <button className={`route-detail-toggle ${showRouteDetails ? 'is-open' : ''}`} onClick={() => setShowRouteDetails(!showRouteDetails)} aria-expanded={showRouteDetails} aria-label={showRouteDetails ? (locale === 'de' ? 'Routendetails ausblenden' : 'Hide route details') : (locale === 'de' ? 'Routendetails einblenden' : 'Show route details')}><ChevronDown size={16} /><span>{showRouteDetails ? (locale === 'de' ? 'Details ausblenden' : 'Hide details') : (locale === 'de' ? 'Details anzeigen' : 'Show details')}</span></button>
+      </div></div>
+      {showRouteDetails && <RouteDetails route={route} locale={locale} speedKmh={speedKmh} activeIndex={activeProfileIndex} onActiveIndexChange={setActiveProfileIndex} condensed={!routeDetailsExpanded || compactViewport} focusWarnings={focusWarnings && !compactViewport} />}
+      {!routeDetailsExpanded && route.warnings.length > 0 && <button className="route-warning-summary" onClick={openWarnings}>{locale === 'de' ? `${route.warnings.length} ${route.warnings.length === 1 ? 'Hinweis' : 'Hinweise'} zur Route · in den Details prüfen` : `${route.warnings.length} route ${route.warnings.length === 1 ? 'note' : 'notes'} · review in details`}</button>}
       <RouteActions key={route.id} route={route} locale={locale} saving={saving} saved={Boolean(persistedRoute)} canShare={Boolean(persistedRoute?.serverVersion && accountAuthenticated)} onSave={saveRoute} onReset={reset} onRide={() => setRideSetup(true)} />
       {syncConflict && <button className="account-link" onClick={() => window.location.reload()}>{locale === 'de' ? 'Aktuellen Serverstand neu laden (lokale Änderungen vorher als Kopie speichern)' : 'Reload server version (save local changes as a copy first)'}</button>}
     </section>}
@@ -594,7 +669,7 @@ export function PlannerApp() {
       <p className="ride-setup-copy">{locale === 'de' ? 'Zeige deinen Standort und den Fortschritt auf dieser Route. Dein Live-Standort bleibt in dieser Sitzung und wird nicht an Velvetia übertragen.' : 'Show your location and progress on this route. Your live location stays in this session and is not sent to Velvetia.'}</p>
       <p className="ride-setup-copy">{locale === 'de' ? 'Es gibt noch keine Abbiegehinweise oder automatische Neuberechnung. Bei gesperrtem Bildschirm oder im Hintergrund kann GPS aussetzen. Zum Bedienen anhalten.' : 'Turn-by-turn directions and automatic rerouting are not available. GPS may stop when the screen locks or the app is in the background. Stop before using controls.'}</p>
       {route && route.warnings.length > 0 ? <p className="ride-setup-copy">{locale === 'de' ? `Die Route enthält ${route.warnings.length} Hinweise. Prüfe diese vor der Fahrt in den Routendetails.` : `This route has ${route.warnings.length} notes. Review them in the route details before riding.`}</p> : null}
-      <Button variant="primary" onClick={() => { if (route) { ride.start(route); setRideSetup(false); setActiveProfileIndex(null); setShowSaved(false); setRouteDetailsExpanded(false) } }}>{locale === 'de' ? 'Standort freigeben und starten' : 'Allow location and start'}</Button>
+      <Button variant="primary" onClick={() => { if (route) { ride.start(route); setRideSetup(false); setActiveProfileIndex(null); setShowSaved(false); setRouteDetailsExpanded(false); setEditingRouteId(null); setWaypointEditorOpen(false) } }}>{locale === 'de' ? 'Standort freigeben und starten' : 'Allow location and start'}</Button>
     </AppDialog>
     <AppDialog open={showSaved} onOpenChange={setShowSaved} label={copy.saved} className="saved-drawer" placement="end">
       <div className="drawer-head"><div><p className="eyebrow">Velvetia</p><h2>{copy.saved}</h2><span className={`persistence-status is-${persistenceState}`}>{persistenceState === 'server' ? accountAuthenticated ? (locale === 'de' ? 'Mit deinem Konto synchronisiert' : 'Synced with your account') : (locale === 'de' ? 'Anonymer Cloud-Speicher' : 'Anonymous cloud storage') : persistenceState === 'checking' ? (locale === 'de' ? 'Speicher wird geprüft …' : 'Checking storage …') : (locale === 'de' ? 'Lokaler Speicher' : 'Local storage')}</span></div><Button variant="icon" onClick={() => setShowSaved(false)} aria-label={locale === 'de' ? 'Schliessen' : 'Close'}><X /></Button></div>
@@ -611,8 +686,8 @@ export function PlannerApp() {
         {historyRouteId === saved.id ? <div className="version-history">{historyLoading ? <span>{locale === 'de' ? 'Versionen werden geladen …' : 'Loading versions …'}</span> : routeVersions.length ? routeVersions.map((version) => <button key={version.version} onClick={() => void restoreVersion(version)}><span><b>v{version.version}</b>{new Date(version.savedAt).toLocaleString(locale === 'de' ? 'de-CH' : 'en-GB')}</span><RotateCcw size={14} /><span className="sr-only">{locale === 'de' ? 'wiederherstellen' : 'restore'}</span></button>) : <span>{locale === 'de' ? 'Noch keine Serverversionen.' : 'No server versions yet.'}</span>}</div> : null}
       </article>)}</div>}
     </AppDialog>
-    <AppDialog open={Boolean(route && routeDetailsExpanded && compactViewport)} onOpenChange={(open) => { if (!open) setRouteDetailsExpanded(false) }} label={locale === 'de' ? 'Alle Routendetails' : 'All route details'} className="route-detail-dialog" placement="sheet">
-      {route && <><div className="dialog-heading"><div><p className="eyebrow">{locale === 'de' ? 'Routendetails' : 'Route details'}</p><h2>{route.name}</h2></div><Button variant="icon" onClick={() => setRouteDetailsExpanded(false)} aria-label={locale === 'de' ? 'Schliessen' : 'Close'}><X size={18} /></Button></div><RouteDetails route={route} locale={locale} speedKmh={speedKmh} activeIndex={activeProfileIndex} onActiveIndexChange={setActiveProfileIndex} /></>}
+    <AppDialog open={Boolean(route && routeDetailsExpanded && compactViewport)} onOpenChange={(open) => { if (!open) setRouteDetailsExpanded(false) }} label={locale === 'de' ? 'Alle Routendetails' : 'All route details'} className="route-detail-dialog" placement="sheet" initialFocus={focusWarnings ? () => document.querySelector<HTMLElement>('.route-detail-dialog .route-warnings') ?? true : undefined}>
+      {route && <><div className="dialog-heading"><div><p className="eyebrow">{locale === 'de' ? 'Routendetails' : 'Route details'}</p><h2>{route.name}</h2></div><Button variant="icon" onClick={() => setRouteDetailsExpanded(false)} aria-label={locale === 'de' ? 'Schliessen' : 'Close'}><X size={18} /></Button></div><RouteDetails route={route} locale={locale} speedKmh={speedKmh} activeIndex={activeProfileIndex} onActiveIndexChange={setActiveProfileIndex} focusWarnings={focusWarnings} /></>}
     </AppDialog>
     <AppDialog open={Boolean(recovery.pending) && recovery.offerOpen} onOpenChange={recovery.setOfferOpen} label={locale === 'de' ? 'Entwurf wiederherstellen' : 'Recover draft'}>
       <h2>{locale === 'de' ? 'Weiterplanen?' : 'Continue planning?'}</h2>
@@ -625,6 +700,7 @@ export function PlannerApp() {
     {showGuide && !recovery.pending && <Onboarding onClose={closeGuide} locale={locale} />}
     {notice && <div className="workspace-notice" role="status"><span>{notice}</span><button onClick={() => setNotice(null)} aria-label={locale === 'de' ? 'Hinweis schliessen' : 'Dismiss notice'}><X size={17} /></button></div>}
 
+    {route && editing && <WaypointEditor key={route.id} open={waypointEditorOpen} onOpenChange={setWaypointEditorOpen} locale={locale} waypoints={waypoints} selectedId={selectedWaypointId} onSelect={setSelectedWaypointId} busy={isPlanning} notice={notice} onChange={changeEditorPoint} onAdd={addEditorPoint} onRemove={removeWaypoint} onReorder={reorderEditorPoint} />}
     {confirmation}
     <footer className="font-credit">Fonts made from <a href="http://www.onlinewebfonts.com" target="_blank" rel="noreferrer">Web Fonts</a> is licensed by CC BY 4.0</footer>
   </main>

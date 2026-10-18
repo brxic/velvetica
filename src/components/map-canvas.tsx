@@ -26,17 +26,22 @@ type Props = {
   rideFix?: RideFix | null
   following?: boolean
   onFollowChange?: (following: boolean) => void
+  editing?: boolean
+  onWaypointSelect?: (id: string) => void
 }
 
 const emptyCollection = (): GeoJSON.FeatureCollection => ({ type: 'FeatureCollection', features: [] })
 
-export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onWaypointMove, onRouteShape, activeProfileIndex, onActiveProfileIndexChange, locale, readOnly = false, theme = 'light', riding = false, rideFix = null, following = false, onFollowChange }: Props) {
+export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onWaypointMove, onRouteShape, activeProfileIndex, onActiveProfileIndexChange, locale, readOnly = false, theme = 'light', riding = false, rideFix = null, following = false, onFollowChange, editing = true, onWaypointSelect }: Props) {
   const [mapStatus, setMapStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const themeRef = useRef(theme)
   const themeUpdateRef = useRef<() => void>(() => {})
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
   const ridingRef = useRef(riding)
+  const editingRef = useRef(editing)
+  const waypointSelectRef = useRef(onWaypointSelect)
+  useEffect(() => { editingRef.current = editing; waypointSelectRef.current = onWaypointSelect }, [editing, onWaypointSelect])
   const followHandlerRef = useRef(onFollowChange)
   const userMarkerRef = useRef<Marker | null>(null)
   const rideCameraUpdateRef = useRef<() => void>(() => {})
@@ -142,14 +147,14 @@ export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onW
       dragMarker.remove(); dragMarker = null
       map.dragPan.enable(); map.getCanvas().style.cursor = ''
       suppressNextClick = true
-      shapeHandlerRef.current(position.lng, position.lat, insertionIndex)
+      if (editingRef.current && !ridingRef.current) shapeHandlerRef.current(position.lng, position.lat, insertionIndex)
       window.setTimeout(() => { suppressNextClick = false }, 0)
       map.off('mousemove', moveRouteDrag); map.off('mouseup', finishRouteDrag)
     }
     const moveRouteDrag = (event: MapMouseEvent) => dragMarker?.setLngLat(event.lngLat)
     const beginRouteDrag = (event: MapMouseEvent) => {
       const route = activeRouteRef.current
-      if (!route || readOnly || ridingRef.current) return
+      if (!route || readOnly || ridingRef.current || !editingRef.current) return
       event.preventDefault()
       const coordinates = route.geometry.coordinates as Coordinate[]
       const routeIndex = nearestCoordinateIndex(coordinates, event.lngLat.lng, event.lngLat.lat)
@@ -171,7 +176,7 @@ export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onW
       map.addLayer({ id: 'ride-accuracy-fill', type: 'fill', source: 'ride-accuracy', paint: { 'fill-color': '#287bea', 'fill-opacity': .12 } })
       map.addLayer({ id: 'ride-accuracy-line', type: 'line', source: 'ride-accuracy', paint: { 'line-color': '#287bea', 'line-width': 1, 'line-opacity': .6 } })
       applyOverlayTheme()
-      map.on('mouseenter', 'active-route-line', () => { map.getCanvas().style.cursor = readOnly || ridingRef.current ? 'url("/map-crosshair.svg") 14 14, crosshair' : 'url("/map-drag.svg") 14 14, grab' })
+      map.on('mouseenter', 'active-route-line', () => { map.getCanvas().style.cursor = readOnly || ridingRef.current || !editingRef.current ? 'grab' : 'url("/map-drag.svg") 14 14, grab' })
       map.on('mousemove', 'active-route-line', (event) => {
         const route = activeRouteRef.current
         if (route && !ridingRef.current) {
@@ -185,7 +190,7 @@ export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onW
       map.on('click', 'active-route-line', (event) => {
         if (suppressNextClick) return
         const route = activeRouteRef.current
-        if (!route || readOnly || ridingRef.current) return
+        if (!route || readOnly || ridingRef.current || !editingRef.current) return
         const coordinates = route.geometry.coordinates as Coordinate[]
         const routeIndex = nearestCoordinateIndex(coordinates, event.lngLat.lng, event.lngLat.lat)
         suppressNextClick = true
@@ -193,7 +198,7 @@ export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onW
         shapeHandlerRef.current(event.lngLat.lng, event.lngLat.lat, routeInsertionIndex(routeIndex, coordinates))
         window.setTimeout(() => { suppressNextClick = false }, 0)
       })
-      map.on('click', (event) => { if (!suppressNextClick && !ridingRef.current) clickHandlerRef.current(event.lngLat.lng, event.lngLat.lat) })
+      map.on('click', (event) => { if (!suppressNextClick && !ridingRef.current && editingRef.current) clickHandlerRef.current(event.lngLat.lng, event.lngLat.lat) })
     })
     mapRef.current = map
     return () => { themeUpdateRef.current = () => {}; dragMarker?.remove(); map.remove(); mapRef.current = null }
@@ -240,8 +245,9 @@ export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onW
       }
       const panels = [...workspace.querySelectorAll<HTMLElement>('.planner-panel, .route-summary, .shared-summary, .ride-panel')]
       const header = workspace.querySelector<HTMLElement>(ridingRef.current ? '.ride-header' : '.topbar')
-      for (const element of [...panels, ...(header ? [header] : [])]) if (!observed.has(element)) { observed.add(element); observer.observe(element) }
-      const padding = mapInsets(container.clientWidth, container.clientHeight, header?.getBoundingClientRect() ?? null, panels.map((panel) => panel.getBoundingClientRect()))
+      const toolbar = ridingRef.current ? null : workspace.querySelector<HTMLElement>('.route-edit-hint')
+      for (const element of [...panels, ...(header ? [header] : []), ...(toolbar ? [toolbar] : [])]) if (!observed.has(element)) { observed.add(element); observer.observe(element) }
+      const padding = mapInsets(container.clientWidth, container.clientHeight, header?.getBoundingClientRect() ?? null, panels.map((panel) => panel.getBoundingClientRect()), toolbar?.getBoundingClientRect())
       insetsRef.current = padding
       const layout = JSON.stringify(padding)
       const offset: [number, number] = [(padding.left - padding.right) / 2, (padding.top - padding.bottom) / 2]
@@ -304,16 +310,18 @@ export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onW
       const element = document.createElement('button')
       element.className = `map-marker map-marker--${waypoint.kind}`
       element.type = 'button'; element.title = waypoint.label
-      element.setAttribute('aria-label', waypoint.label)
+      element.disabled = readOnly || riding || !editing
+      element.setAttribute('aria-label', `${waypoint.label}${editing && !readOnly ? (locale === 'de' ? ' bearbeiten' : ' edit') : ''}`)
+      element.addEventListener('click', (event) => { event.stopPropagation(); if (!readOnly && !ridingRef.current && editingRef.current) waypointSelectRef.current?.(waypoint.id) })
       element.textContent = waypoint.kind === 'start' ? 'A' : waypoint.kind === 'end' ? 'B' : waypoint.kind === 'shaping' ? '•' : String(index + 1)
-      const marker = new maplibregl.Marker({ element, anchor: 'center', draggable: !readOnly && !riding }).setLngLat(waypoint.coordinate).addTo(map)
+      const marker = new maplibregl.Marker({ element, anchor: 'center', draggable: !readOnly && !riding && editing }).setLngLat(waypoint.coordinate).addTo(map)
       marker.on('dragend', () => {
         const position = marker.getLngLat()
         moveHandlerRef.current(waypoint.id, position.lng, position.lat)
       })
       return marker
     })
-  }, [waypoints, readOnly, riding])
+  }, [waypoints, readOnly, riding, editing, locale])
 
   useEffect(() => {
     const map = mapRef.current
@@ -338,5 +346,5 @@ export function MapCanvas({ activeRoute, savedRoutes, waypoints, onMapClick, onW
 
   useEffect(() => () => { userMarkerRef.current?.remove(); userMarkerRef.current = null }, [])
 
-  return <><div ref={containerRef} className="map-canvas" aria-label={locale === 'de' ? 'Interaktive Karte der Schweiz' : 'Interactive map of Switzerland'} />{mapStatus !== 'ready' ? <div className="map-status" aria-live="polite" aria-atomic="true">{mapStatus === 'loading' ? <span className="spinner" aria-hidden="true" /> : null}<span>{mapStatus === 'loading' ? (locale === 'de' ? 'Karte wird geladen' : 'Loading map') : (locale === 'de' ? 'Karte nicht erreichbar. Prüfe deine Verbindung.' : 'Map unavailable. Check your connection.')}</span></div> : null}</>
+  return <><div ref={containerRef} className={`map-canvas ${!editing || readOnly ? 'is-browsing' : ''}`} aria-label={locale === 'de' ? 'Interaktive Karte der Schweiz' : 'Interactive map of Switzerland'} />{mapStatus !== 'ready' ? <div className="map-status" aria-live="polite" aria-atomic="true">{mapStatus === 'loading' ? <span className="spinner" aria-hidden="true" /> : null}<span>{mapStatus === 'loading' ? (locale === 'de' ? 'Karte wird geladen' : 'Loading map') : (locale === 'de' ? 'Karte nicht erreichbar. Prüfe deine Verbindung.' : 'Map unavailable. Check your connection.')}</span></div> : null}</>
 }

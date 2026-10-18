@@ -7,14 +7,14 @@ import type { Coordinate, Locale } from '@/lib/domain'
 import { Button } from './ui/button'
 
 type Place = { label: string; coordinate: Coordinate }
-type Props = { kind: 'start' | 'end'; locale: Locale; value?: string; onSelect: (place: Place) => boolean | void | Promise<boolean | void>; onClear?: () => boolean | void | Promise<boolean | void> }
+type Props = { kind: 'start' | 'end' | 'via'; locale: Locale; value?: string; label?: string; onSelect: (place: Place) => boolean | void | Promise<boolean | void>; onClear?: () => boolean | void | Promise<boolean | void> }
 type SearchState = { query: string; status: 'idle' | 'loading' | 'ready' | 'error'; results: Place[] }
 
 // An externally selected home/route is a new search session; typing never falls
 // back to the selected label when the user intentionally empties the input.
 export function PlaceSearch(props: Props) { return <PlaceSearchInput key={props.value ?? ''} {...props} /> }
 
-function PlaceSearchInput({ kind, locale, value, onSelect, onClear }: Props) {
+function PlaceSearchInput({ kind, locale, value, label, onSelect, onClear }: Props) {
   const id = useId()
   const de = locale === 'de'
   const [query, setQuery] = useState(value ?? '')
@@ -39,7 +39,7 @@ function PlaceSearchInput({ kind, locale, value, onSelect, onClear }: Props) {
     return () => { controller.abort(); window.clearTimeout(timer) }
   }, [query, canSearch, attempt])
 
-  const placeholder = kind === 'start' ? (de ? 'Startort suchen' : 'Search start') : (de ? 'Zielort suchen' : 'Search destination')
+  const placeholder = label ?? (kind === 'start' ? (de ? 'Startort suchen' : 'Search start') : kind === 'end' ? (de ? 'Zielort suchen' : 'Search destination') : (de ? 'Zwischenpunkt suchen' : 'Search waypoint'))
   const pending = canSearch && (search.query !== query || search.status === 'loading' || search.status === 'idle')
   return <Autocomplete.Root items={results} filter={null} value={query} open={open && canSearch} onOpenChange={setOpen} itemToStringValue={(place) => place.label} onValueChange={async (next, details) => {
     if (details.reason === 'item-press') {

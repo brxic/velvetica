@@ -9,9 +9,13 @@
   --line: #dfe1e4;
   --red: #e00112;
   --red-bright: #fd0002;
+  --action: #e00112;
+  --action-hover: #bb0010;
+  --danger-text: #b90010;
   --red-soft: color-mix(in srgb, var(--red) 10%, var(--card));
   --success: #17653c;
   --warning: #795100;
+  --warning-soft: color-mix(in srgb, var(--warning) 10%, var(--card));
   --space-1: .25rem;
   --space-2: .5rem;
   --space-3: .75rem;
@@ -49,6 +53,7 @@
   --red: #fd0002;
   --success: #85d6a6;
   --warning: #efc26c;
+  --danger-text: #ff949b;
   --shadow: 0 8px 32px #10111433;
   --shadow-overlay: 0 16px 48px #10111466;
   color-scheme: dark;

@@ -3,6 +3,9 @@ import { mapInsets, type PanelRect } from './map-layout'
 const rect = (left: number, top: number, width: number, height: number): PanelRect => ({ left, top, width, height, right: left + width, bottom: top + height })
 
 describe('shared map work area', () => {
+  it('keeps the editing toolbar clear of camera padding and map controls', () => {
+    expect(mapInsets(390, 850, rect(12, 12, 366, 60), [], rect(12, 86, 350, 56)).top).toBe(154)
+  })
   it('accounts for a desktop planner and a compact route summary', () => {
     const padding = mapInsets(1440, 900, rect(16, 16, 1408, 60), [rect(16, 144, 336, 740), rect(368, 500, 720, 384)])
     expect(padding).toMatchObject({ top: 88, left: 368, right: 20, bottom: 416 })
@@ -15,5 +18,10 @@ describe('shared map work area', () => {
     const padding = mapInsets(390, 667, rect(12, 12, 366, 60), [rect(0, 250, 390, 417), rect(0, 0, 0, 0)])
     expect(padding.bottom).toBe(433)
     expect(padding.top + padding.bottom).toBeLessThan(667 - 140)
+  })
+  it('reserves room for horizontal controls on short phones without placing them under the sheet', () => {
+    const padding = mapInsets(390, 667, rect(12, 12, 366, 60), [rect(12, 220, 366, 435)], rect(150, 86, 180, 44))
+    expect(padding.bottom).toBe(453)
+    expect(667 - padding.bottom).toBeLessThan(220)
   })
 })

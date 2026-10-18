@@ -9,12 +9,12 @@ const guides = {
   de: [
     { icon: MapPin, title: 'Start setzen', text: 'Klicke auf die Karte oder nutze die Ortssuche, um deinen Startpunkt zu wählen.' },
     { icon: Route, title: 'Route planen', text: 'Wähle deinen Fahrradtyp. Für eine Rundtour gibst du die Distanz an, für One-Way ein Ziel.' },
-    { icon: MousePointer2, title: 'Verlauf ändern', text: 'Ziehe die Routenlinie an eine andere Stelle oder tippe sie an, um einen Zwischenpunkt zu setzen.' },
+    { icon: MousePointer2, title: 'Verlauf ändern', text: 'Wähle «Route bearbeiten». Ziehe die Routenlinie an eine andere Stelle oder tippe sie an, um einen Zwischenpunkt zu setzen. Über «Wegpunkte» kannst du Orte auch suchen und ändern.' },
   ],
   en: [
     { icon: MapPin, title: 'Choose a start', text: 'Click the map or use place search to choose your starting point.' },
     { icon: Route, title: 'Plan a route', text: 'Choose your bike type. Set a distance for a round trip or a destination for a one-way ride.' },
-    { icon: MousePointer2, title: 'Change the route', text: 'Drag the route line to another place or tap it to add a waypoint.' },
+    { icon: MousePointer2, title: 'Change the route', text: 'Choose “Edit route”. Drag the route line to another place or tap it to add a waypoint. Use “Waypoints” to find and change places without dragging.' },
   ],
 }
 
