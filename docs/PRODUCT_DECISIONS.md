@@ -2,6 +2,9 @@
 
 **Stand:** 15. August 2026
 
+Dieses Dokument hält Entscheidungen für den damaligen lokalen Prototyp fest. Die spätere Mobile-first-Produktvision einschliesslich MTB/Downhill und die Namensbereinigung stehen im [aktuellen Konzeptentwurf](MOBILE_FIRST_KONZEPT.md). Die heutige App unterstützt MTB weiterhin nicht.
+Alle langfristigen Featureideen und geplanten Kanäle werden im [Produktvisions- und Ideenregister](PRODUKTVISION_UND_IDEENREGISTER.md) bewahrt.
+
 ## Verbindlich für den lokalen Prototyp
 
 1. Das Produkt heißt **Velvetia**.
